@@ -3,11 +3,12 @@ use async_trait::async_trait;
 
 /// Delegates a scheme to an external command (e.g. `aria2c` for `magnet`).
 ///
-/// Each argument may contain `{uri}` (the address URI) and `{dest}` (the
-/// destination path). The command is expected to create the destination file.
+/// Each argument may contain `{uri}` (the address URI), `{dest}` (the full
+/// destination path), `{dir}` (its parent directory), and `{name}` (its file
+/// name). The command is expected to create the destination file.
 pub struct CommandFetcher {
     name: String,
-    schemes: &'static [&'static str],
+    schemes: Vec<String>,
     program: String,
     args: Vec<String>,
 }
@@ -15,7 +16,7 @@ pub struct CommandFetcher {
 impl CommandFetcher {
     pub fn new(
         name: impl Into<String>,
-        schemes: &'static [&'static str],
+        schemes: Vec<String>,
         program: impl Into<String>,
         args: Vec<String>,
     ) -> Self {
@@ -34,8 +35,8 @@ impl Fetcher for CommandFetcher {
         &self.name
     }
 
-    fn schemes(&self) -> &'static [&'static str] {
-        self.schemes
+    fn schemes(&self) -> &[String] {
+        &self.schemes
     }
 
     async fn fetch(&self, request: &FetchRequest) -> Result<Fetched, FetchError> {
@@ -44,12 +45,25 @@ impl Fetcher for CommandFetcher {
         }
 
         let destination = request.destination.to_string_lossy().into_owned();
+        let directory = request
+            .destination
+            .parent()
+            .map(|parent| parent.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let name = request
+            .destination
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+
         let args: Vec<String> = self
             .args
             .iter()
             .map(|arg| {
                 arg.replace("{uri}", &request.address.uri)
                     .replace("{dest}", &destination)
+                    .replace("{dir}", &directory)
+                    .replace("{name}", &name)
             })
             .collect();
 

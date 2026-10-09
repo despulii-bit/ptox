@@ -62,7 +62,7 @@ pub struct Fetched {
 #[async_trait]
 pub trait Fetcher: Send + Sync {
     fn name(&self) -> &str;
-    fn schemes(&self) -> &'static [&'static str];
+    fn schemes(&self) -> &[String];
     async fn fetch(&self, request: &FetchRequest) -> Result<Fetched, FetchError>;
 }
 
@@ -92,7 +92,7 @@ impl FetchRegistry {
     pub fn fetcher_for(&self, scheme: &str) -> Option<Arc<dyn Fetcher>> {
         self.fetchers
             .iter()
-            .find(|fetcher| fetcher.schemes().contains(&scheme))
+            .find(|fetcher| fetcher.schemes().iter().any(|name| name == scheme))
             .cloned()
     }
 

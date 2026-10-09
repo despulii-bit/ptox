@@ -94,7 +94,7 @@ async fn command_fetcher_delegates_a_scheme() {
     let mut registry = FetchRegistry::new();
     registry.register(Arc::new(CommandFetcher::new(
         "copy",
-        &["copy"],
+        vec!["copy".to_owned()],
         "cp",
         vec![source.to_string_lossy().into_owned(), "{dest}".to_owned()],
     )));

@@ -4,8 +4,6 @@ use futures::StreamExt;
 use sha2::{Digest, Sha256};
 use tokio::io::AsyncWriteExt;
 
-const SCHEMES: &[&str] = &["http", "https"];
-
 /// A descriptive default; many hosts (Wikimedia, etc.) reject requests without one.
 const DEFAULT_USER_AGENT: &str = concat!(
     "cwm/",
@@ -16,6 +14,7 @@ const DEFAULT_USER_AGENT: &str = concat!(
 /// Fetches `http`/`https` URLs. Writes atomically and verifies sha256.
 pub struct HttpFetcher {
     client: reqwest::Client,
+    schemes: Vec<String>,
 }
 
 impl HttpFetcher {
@@ -29,7 +28,10 @@ impl HttpFetcher {
             .user_agent(user_agent)
             .build()
             .unwrap_or_else(|_| reqwest::Client::new());
-        Self { client }
+        Self {
+            client,
+            schemes: vec!["http".to_owned(), "https".to_owned()],
+        }
     }
 }
 
@@ -45,8 +47,8 @@ impl Fetcher for HttpFetcher {
         "http"
     }
 
-    fn schemes(&self) -> &'static [&'static str] {
-        SCHEMES
+    fn schemes(&self) -> &[String] {
+        &self.schemes
     }
 
     async fn fetch(&self, request: &FetchRequest) -> Result<Fetched, FetchError> {
