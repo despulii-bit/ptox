@@ -28,6 +28,7 @@ Everything else is separate software built on this contract:
 - `spec/core-contract.md` — the locked, language-neutral contract.
 - `spec/conformance.md` — what any implementation must satisfy.
 - `spec/vectors.json` — language-neutral test vectors.
+- `spec/schema/wire.schema.json` — JSON Schema for the wire protocol.
 - `crates/cwm-core` — the Rust implementation of the core.
 - `crates/cwm-conformance` — provider conformance suite (library + CLI).
 
@@ -70,10 +71,10 @@ repo so that cloning this program never pulls in unrelated files.
 
 ## Status
 
-Contract v0 locked; Rust core implemented (fan-out, streaming, isolation,
-timeout, cancellation, bounded NDJSON subprocess bridge, provider env config);
-provider conformance suite (`cwm-conformance`); 25 tests green. Providers,
-keyword search, and all frontends are separate software.
+Contract v1 locked (with a JSON Schema); Rust core implemented (fan-out,
+streaming, isolation, timeout, cancellation, bounded NDJSON subprocess bridge,
+provider env config); provider conformance suite (`cwm-conformance`); 25 tests
+green. Providers, keyword search, and all frontends are separate software.
 
 ## Contributing
 

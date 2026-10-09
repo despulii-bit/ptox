@@ -9,6 +9,10 @@ use serde::Serialize;
 use serde_json::Value;
 use tokio::io::{AsyncBufRead, AsyncBufReadExt};
 
+/// Wire protocol version, carried in every request as `v`.
+/// See `spec/schema/wire.schema.json`.
+pub const PROTOCOL_VERSION: u32 = 1;
+
 /// Default maximum wire-line length. A longer line is treated as `malformed`,
 /// so a hostile provider cannot exhaust the host's memory.
 pub const MAX_LINE_BYTES: usize = 8 * 1024 * 1024;
@@ -83,6 +87,7 @@ pub enum WireLine {
 
 #[derive(Serialize)]
 struct Request<'a> {
+    v: u32,
     id: u64,
     method: &'static str,
     params: Params<'a>,
@@ -96,6 +101,7 @@ struct Params<'a> {
 /// Encode a `search` request as a single NDJSON line.
 pub fn encode_request(id: u64, query: &FileQuery) -> Result<String, serde_json::Error> {
     let request = Request {
+        v: PROTOCOL_VERSION,
         id,
         method: "search",
         params: Params { query },
@@ -151,6 +157,7 @@ mod tests {
         let line = encode_request(7, &FileQuery::new("hello")).expect("encode");
         assert!(line.ends_with('\n'));
         let value: Value = serde_json::from_str(line.trim_end()).expect("json");
+        assert_eq!(value["v"], 1);
         assert_eq!(value["id"], 7);
         assert_eq!(value["method"], "search");
         assert_eq!(value["params"]["query"]["text"], "hello");

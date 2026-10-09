@@ -1,4 +1,4 @@
-# cwm Core Contract — v0 (locked)
+# cwm Core Contract — v1 (locked)
 
 Language-neutral and authoritative. Supersedes the planning drafts in
 `cwm-agents/planning/core-interface.md` and `core-minimal.md`.
@@ -139,7 +139,7 @@ adapters can be written in any language. The host bounds each line (default
 
 Request:
 ```
-{"id": 1, "method": "search", "params": {"query": <FileQuery>}}
+{"v": 1, "id": 1, "method": "search", "params": {"query": <FileQuery>}}
 ```
 
 Result line (one per result):
@@ -167,5 +167,7 @@ Cancellation (host → provider):
 
 ## 10. Versioning
 
-This is contract **v0**. Changes are additive where possible; breaking changes
-bump the version. Consumers MUST ignore unknown fields.
+This is contract **v1**. Every request carries the wire protocol version in `v`;
+a provider that cannot speak it SHOULD fail with `unsupported`. Changes are
+additive where possible; breaking changes bump the version. Consumers MUST ignore
+unknown fields. The machine-readable schema is `spec/schema/wire.schema.json`.

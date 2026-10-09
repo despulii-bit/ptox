@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/despulii-bit/cwm/spec/schema/wire.schema.json",
+  "title": "cwm wire protocol v1",
+  "description": "NDJSON messages exchanged between a cwm host and a provider.",
+  "$defs": {
+    "HashAlgos": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "Extras": {
+      "type": "object"
+    },
+    "FileQuery": {
+      "type": "object",
+      "required": ["text"],
+      "properties": {
+        "text": { "type": "string" },
+        "hashes": { "$ref": "#/$defs/HashAlgos" },
+        "mimetype": { "type": "string" },
+        "size_min": { "type": "integer", "minimum": 0 },
+        "size_max": { "type": "integer", "minimum": 0 },
+        "limit": { "type": "integer", "minimum": 0 },
+        "extras": { "$ref": "#/$defs/Extras" }
+      },
+      "additionalProperties": true
+    },
+    "Address": {
+      "type": "object",
+      "required": ["scheme", "uri"],
+      "properties": {
+        "scheme": { "type": "string", "minLength": 1 },
+        "uri": { "type": "string", "minLength": 1 },
+        "hashes": { "$ref": "#/$defs/HashAlgos" },
+        "size": { "type": "integer", "minimum": 0 },
+        "extras": { "$ref": "#/$defs/Extras" }
+      },
+      "additionalProperties": true
+    },
+    "FileResult": {
+      "type": "object",
+      "required": ["provider", "addresses"],
+      "properties": {
+        "provider": { "type": "string", "minLength": 1 },
+        "title": { "type": "string" },
+        "addresses": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/Address" }
+        },
+        "size": { "type": "integer", "minimum": 0 },
+        "hashes": { "$ref": "#/$defs/HashAlgos" },
+        "mimetype": { "type": "string" },
+        "raw": {}
+      },
+      "additionalProperties": true
+    },
+    "WireFileResult": {
+      "type": "object",
+      "required": ["addresses"],
+      "properties": {
+        "provider": { "type": "string", "minLength": 1 },
+        "title": { "type": "string" },
+        "addresses": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/Address" }
+        },
+        "size": { "type": "integer", "minimum": 0 },
+        "hashes": { "$ref": "#/$defs/HashAlgos" },
+        "mimetype": { "type": "string" },
+        "raw": {}
+      },
+      "additionalProperties": true
+    },
+    "ErrorCode": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ErrorInfo": {
+      "type": "object",
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "$ref": "#/$defs/ErrorCode" },
+        "message": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "Failure": {
+      "type": "object",
+      "required": ["provider", "error"],
+      "properties": {
+        "provider": { "type": "string", "minLength": 1 },
+        "error": { "$ref": "#/$defs/ErrorInfo" }
+      },
+      "additionalProperties": true
+    },
+    "Request": {
+      "type": "object",
+      "required": ["v", "id", "method", "params"],
+      "properties": {
+        "v": { "type": "integer", "const": 1 },
+        "id": { "type": "integer", "minimum": 0 },
+        "method": { "const": "search" },
+        "params": {
+          "type": "object",
+          "required": ["query"],
+          "properties": { "query": { "$ref": "#/$defs/FileQuery" } },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "ResultLine": {
+      "type": "object",
+      "required": ["id", "result"],
+      "properties": {
+        "id": { "type": "integer", "minimum": 0 },
+        "result": { "$ref": "#/$defs/WireFileResult" }
+      },
+      "additionalProperties": true
+    },
+    "ErrorLine": {
+      "type": "object",
+      "required": ["id", "error"],
+      "properties": {
+        "id": { "type": "integer", "minimum": 0 },
+        "error": { "$ref": "#/$defs/ErrorInfo" }
+      },
+      "additionalProperties": true
+    },
+    "DoneLine": {
+      "type": "object",
+      "required": ["id", "done"],
+      "properties": {
+        "id": { "type": "integer", "minimum": 0 },
+        "done": { "const": true }
+      },
+      "additionalProperties": true
+    }
+  }
+}
