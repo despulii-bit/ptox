@@ -13,15 +13,19 @@ storage, no ranking, and no network I/O**.
 FileQuery ──▶ fanout(query, providers) ──▶ Stream[FileResult | Failure]
 ```
 
-Everything else is separate software built on this contract:
+This repo is the **shared SDK**: the contracts, the search engine, the retrieval
+fabric, and the conformance kit. Everything else is separate software built on
+those contracts:
 
 | Layer | Examples |
 |---|---|
 | Providers (one per network) | clearnet, I2P, Freenet, IPFS, BitTorrent |
-| Retrieval / fetch fabric | protocol fetchers, download manager |
 | Post-processing | merge, dedup, ranking |
-| Frontends | CLI, TUI, GUI, web |
+| Frontends (clients) | CLI, TUI, GUI, web, agents |
 | Index | a local store exposed as just another provider |
+
+Only **clients** (distributions) and **providers** (plugins) are separate repos;
+all shared libraries live here.
 
 ## Layout
 
@@ -29,11 +33,12 @@ Everything else is separate software built on this contract:
 - `spec/conformance.md` — what any implementation must satisfy.
 - `spec/vectors.json` — language-neutral test vectors.
 - `spec/schema/wire.schema.json` — JSON Schema for the wire protocol.
-- `crates/cwm-core` — the Rust implementation of the core.
+- `crates/cwm-core` — the contracts, search engine, and NDJSON bridge.
+- `crates/cwm-fetch` — retrieval fabric (`Fetcher` contract + HTTP/command fetchers).
 - `crates/cwm-conformance` — provider conformance suite (library + CLI).
 
-Providers are separate software with their own repos; this repo keeps only the
-core and its tooling.
+Providers and clients are separate repos; this repo holds only the shared
+libraries.
 
 ## Development
 
@@ -71,10 +76,10 @@ repo so that cloning this program never pulls in unrelated files.
 
 ## Status
 
-Contract v2 locked (with a JSON Schema); Rust core implemented (fan-out,
-streaming, isolation, timeout, cancellation, bounded NDJSON subprocess bridge,
-provider env config); provider conformance suite (`cwm-conformance`); 25 tests
-green. Providers, keyword search, and all frontends are separate software.
+Contract v2 locked (with a JSON Schema); Rust core (fan-out, streaming,
+isolation, timeout, cancellation, bounded NDJSON subprocess bridge); retrieval
+fabric (`cwm-fetch`); conformance suite (`cwm-conformance`); 34 tests green.
+Providers, clients, ranking, and indexing are separate software.
 
 ## Contributing
 

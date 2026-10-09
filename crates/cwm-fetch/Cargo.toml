@@ -1,0 +1,21 @@
+[package]
+name = "cwm-fetch"
+description = "Retrieval fabric for cwm: turn an Address into bytes on disk."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+async-trait = "0.1"
+cwm-core = { path = "../cwm-core" }
+futures = "0.3"
+hex = "0.4"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }
+sha2 = "0.10"
+thiserror = "1"
+tokio = { version = "1", features = ["fs", "io-util", "process", "rt", "sync"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "rt-multi-thread"] }
