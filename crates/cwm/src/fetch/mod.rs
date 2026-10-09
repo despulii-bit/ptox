@@ -22,6 +22,7 @@ mod http;
 pub use command::CommandFetcher;
 pub use http::HttpFetcher;
 
+use crate::merge::MergedResult;
 use crate::types::Address;
 use async_trait::async_trait;
 use sha2::{Digest, Sha256};
@@ -41,6 +42,8 @@ pub enum FetchError {
     Command(String),
     #[error("hash mismatch: expected {expected}, got {actual}")]
     HashMismatch { expected: String, actual: String },
+    #[error("result has no address")]
+    NoAddress,
 }
 
 #[derive(Debug, Clone)]
@@ -113,6 +116,17 @@ impl FetchRegistry {
             })
             .await
     }
+
+    /// Fetch the preferred address of a merged result, verifying its sha256.
+    pub async fn fetch_merged(
+        &self,
+        result: &MergedResult,
+        destination: impl Into<PathBuf>,
+    ) -> Result<Fetched, FetchError> {
+        let address = preferred_address(result).ok_or(FetchError::NoAddress)?;
+        self.fetch(address, destination, expected_sha256(result, address))
+            .await
+    }
 }
 
 /// sha256 of a byte slice, as lowercase hex.
@@ -135,6 +149,34 @@ pub fn verify_sha256(expected: Option<&str>, actual: &str) -> Result<(), FetchEr
         }),
         _ => Ok(()),
     }
+}
+
+/// Pick the preferred address of a result: `https` > `http` > `ipfs` > `magnet` > other.
+pub fn preferred_address(result: &MergedResult) -> Option<&Address> {
+    result
+        .addresses
+        .iter()
+        .min_by_key(|address| match address.scheme.as_str() {
+            "https" => 0,
+            "http" => 1,
+            "ipfs" => 2,
+            "magnet" => 3,
+            _ => 4,
+        })
+}
+
+/// The expected sha256 for a result/address, if either carries one.
+pub fn expected_sha256(result: &MergedResult, address: &Address) -> Option<String> {
+    result
+        .hashes
+        .get("sha256")
+        .or_else(|| {
+            address
+                .hashes
+                .as_ref()
+                .and_then(|hashes| hashes.get("sha256"))
+        })
+        .cloned()
 }
 
 /// `<destination>.part` — written first, then renamed into place.

@@ -13,6 +13,7 @@
 //! Providers (network plugins) and clients (frontends) are built on top.
 #![forbid(unsafe_code)]
 
+pub mod engine;
 pub mod merge;
 pub mod provider;
 pub mod search;
@@ -21,6 +22,7 @@ pub mod types;
 #[cfg(feature = "fetch")]
 pub mod fetch;
 
+pub use engine::{Engine, SearchReport};
 pub use merge::{merge, MergeOptions, MergedResult};
 pub use provider::*;
 pub use search::*;
