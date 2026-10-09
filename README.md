@@ -9,7 +9,8 @@ It has three parts:
 
 - **Contracts** — the data model and interfaces: `FileQuery`, `FileResult`,
   `Address`, `SearchProvider`, `Fetcher`.
-- **Engines** — the search fan-out engine and the retrieval engine.
+- **Engines** — the search fan-out engine, the retrieval engine, and the
+  merge/rank post-processor.
 - **Tooling** — the conformance suite and the wire schema.
 
 It does **not** include networks or user interfaces. Those are built on top:
@@ -31,11 +32,12 @@ repo per shared component — add a crate here.
 ## Layout
 
 - `spec/` — the contract, conformance requirements, test vectors, JSON Schema.
-- `crates/cwm` — **the SDK**, one crate with four modules:
+- `crates/cwm` — **the SDK**, one crate with five modules:
   - `cwm::types` — data contracts (`FileQuery`, `FileResult`, `Address`, …).
   - `cwm::search` — the `SearchProvider` contract and the fan-out engine.
   - `cwm::provider` — the NDJSON wire format and `SubprocessProvider`.
   - `cwm::fetch` — the `Fetcher` contract and retrieval (feature `fetch`).
+  - `cwm::merge` — deduplicate + rank results from many providers.
 - `crates/cwm-conformance` — provider conformance suite (library + CLI).
 
 A client depends on `cwm` (enable the `fetch` feature for retrieval). A provider
@@ -80,7 +82,8 @@ private repo so that cloning this SDK never pulls in unrelated files.
 Private, pre-release. Contract **v2** locked (with a JSON Schema). The SDK is a
 single `cwm` crate with `types` / `search` / `provider` / `fetch` modules (fetch
 behind a feature); the conformance suite is the `cwm-conformance` crate.
-Providers, clients, ranking, and indexing are separate software. 34 tests green.
+Providers, clients, ranking policy, and indexing are separate; the SDK supplies a
+default merge/rank. 39 tests green.
 
 ## Contributing
 

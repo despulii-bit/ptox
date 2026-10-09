@@ -40,7 +40,7 @@ cargo test --workspace
 - `spec/core-contract.md` — the locked, language-neutral contract.
 - `spec/conformance.md` — the behavior every implementation must satisfy.
 - `spec/vectors.json` — language-neutral data-validation vectors.
-- `crates/cwm` — the SDK: `types`, `search`, `provider`, and `fetch` modules.
+- `crates/cwm` — the SDK: `types`, `search`, `provider`, `fetch`, and `merge` modules.
 - `crates/cwm-conformance` — provider conformance suite.
 
 Providers live in **separate repos** (or, for development, the private lab).
