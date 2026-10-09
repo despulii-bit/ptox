@@ -1,4 +1,4 @@
-# cwm Core Contract — v1 (locked)
+# cwm Core Contract — v2 (locked)
 
 Language-neutral and authoritative. Supersedes the planning drafts in
 `cwm-agents/planning/core-interface.md` and `core-minimal.md`.
@@ -25,13 +25,22 @@ results.*
 |---|---|---|---|
 | `text` | string | **yes** | Free-text keywords; may be `""` when another selector is present. |
 | `hashes` | `{algo: value}` | no | Content-addressed lookup (e.g. `infohash`, `sha256`, `cid`). |
-| `mimetype` | string | no | e.g. `application/pdf`. |
+| `mimetypes` | `[string]` | no | Accepted media types: full (`application/pdf`), top-level (`image`), or wildcarded (`image/*`). |
+| `extensions` | `[string]` | no | Accepted extensions, lowercase, no leading dot (`pdf`, `jpg`). |
+| `filename` | string | no | Filename or glob pattern (best-effort). |
 | `size_min` | int | no | Bytes, inclusive. |
 | `size_max` | int | no | Bytes, inclusive. |
+| `published_after` | string | no | RFC 3339 UTC; publish-time lower bound. |
+| `published_before` | string | no | RFC 3339 UTC; publish-time upper bound. |
+| `lang` | string | no | Preferred language (BCP 47). |
 | `limit` | int | no | Max results **per provider** (best-effort). |
-| `extras` | `{string: any}` | no | Provider-specific passthrough. |
+| `extras` | `{string: any}` | no | Provider-specific passthrough; keys SHOULD be namespaced. |
 
 Providers MUST NOT mutate the query.
+
+**Filter semantics.** Filters are OR within a field and AND across fields. They are
+best-effort: a provider that cannot honor a filter MUST still return text matches
+rather than an empty result.
 
 ---
 
@@ -59,7 +68,11 @@ ecosystem depends on.
 | `addresses` | `[Address]` | **yes** | Non-empty. Ways to obtain it. |
 | `size` | int | no | Bytes. |
 | `hashes` | `{algo: value}` | no | Content digests for the result as a whole. |
-| `mimetype` | string | no | |
+| `mimetype` | string | no | Media type. |
+| `lang` | string | no | BCP 47 language. |
+| `published` | string | no | RFC 3339 UTC. |
+| `last_seen` | string | no | RFC 3339 UTC. |
+| `score` | number | no | Provider-local relevance; NOT comparable across providers. |
 | `raw` | `any` | no | Untouched original payload. Never interpreted by the core. |
 
 On the wire a provider may omit `provider`; the host fills it in with the
@@ -139,7 +152,7 @@ adapters can be written in any language. The host bounds each line (default
 
 Request:
 ```
-{"v": 1, "id": 1, "method": "search", "params": {"query": <FileQuery>}}
+{"v": 2, "id": 1, "method": "search", "params": {"query": <FileQuery>}}
 ```
 
 Result line (one per result):
@@ -167,7 +180,11 @@ Cancellation (host → provider):
 
 ## 10. Versioning
 
-This is contract **v1**. Every request carries the wire protocol version in `v`;
+This is contract **v2**. Every request carries the wire protocol version in `v`;
 a provider that cannot speak it SHOULD fail with `unsupported`. Changes are
 additive where possible; breaking changes bump the version. Consumers MUST ignore
 unknown fields. The machine-readable schema is `spec/schema/wire.schema.json`.
+
+- **v2** — `mimetype` → `mimetypes` (list); added `extensions`, `filename`,
+  `published_after`/`published_before`, `lang` to `FileQuery`; added `lang`,
+  `published`, `last_seen`, `score` to `FileResult`.

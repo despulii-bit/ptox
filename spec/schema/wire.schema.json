@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/despulii-bit/cwm/spec/schema/wire.schema.json",
-  "title": "cwm wire protocol v1",
+  "title": "cwm wire protocol v2",
   "description": "NDJSON messages exchanged between a cwm host and a provider.",
   "$defs": {
     "HashAlgos": {
@@ -17,9 +17,20 @@
       "properties": {
         "text": { "type": "string" },
         "hashes": { "$ref": "#/$defs/HashAlgos" },
-        "mimetype": { "type": "string" },
+        "mimetypes": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "extensions": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "filename": { "type": "string", "minLength": 1 },
         "size_min": { "type": "integer", "minimum": 0 },
         "size_max": { "type": "integer", "minimum": 0 },
+        "published_after": { "type": "string", "minLength": 1 },
+        "published_before": { "type": "string", "minLength": 1 },
+        "lang": { "type": "string", "minLength": 1 },
         "limit": { "type": "integer", "minimum": 0 },
         "extras": { "$ref": "#/$defs/Extras" }
       },
@@ -51,6 +62,10 @@
         "size": { "type": "integer", "minimum": 0 },
         "hashes": { "$ref": "#/$defs/HashAlgos" },
         "mimetype": { "type": "string" },
+        "lang": { "type": "string" },
+        "published": { "type": "string" },
+        "last_seen": { "type": "string" },
+        "score": { "type": "number" },
         "raw": {}
       },
       "additionalProperties": true
@@ -69,6 +84,10 @@
         "size": { "type": "integer", "minimum": 0 },
         "hashes": { "$ref": "#/$defs/HashAlgos" },
         "mimetype": { "type": "string" },
+        "lang": { "type": "string" },
+        "published": { "type": "string" },
+        "last_seen": { "type": "string" },
+        "score": { "type": "number" },
         "raw": {}
       },
       "additionalProperties": true
@@ -99,7 +118,7 @@
       "type": "object",
       "required": ["v", "id", "method", "params"],
       "properties": {
-        "v": { "type": "integer", "const": 1 },
+        "v": { "type": "integer", "const": 2 },
         "id": { "type": "integer", "minimum": 0 },
         "method": { "const": "search" },
         "params": {

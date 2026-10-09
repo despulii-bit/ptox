@@ -1,5 +1,5 @@
 {
-  "contract_version": 1,
+  "contract_version": 2,
   "valid": {
     "file_query": [
       {
@@ -22,13 +22,25 @@
         "name": "full",
         "value": {
           "text": "annual report",
-          "mimetype": "application/pdf",
+          "mimetypes": ["application/pdf"],
+          "extensions": ["pdf", "docx"],
+          "filename": "*report*.pdf",
           "size_min": 1024,
           "size_max": 104857600,
+          "published_after": "2024-01-01T00:00:00Z",
+          "lang": "en",
           "limit": 25,
           "extras": {
-            "lang": "en"
+            "example.sort": "recent"
           }
+        }
+      },
+      {
+        "name": "media",
+        "value": {
+          "text": "red fox",
+          "mimetypes": ["image", "video/*"],
+          "extensions": ["jpg", "png", "mp4"]
         }
       },
       {
@@ -86,6 +98,24 @@
           "hashes": {
             "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
           }
+        }
+      },
+      {
+        "name": "with_metadata",
+        "value": {
+          "provider": "example-net",
+          "title": "annual-report.pdf",
+          "addresses": [
+            {
+              "scheme": "https",
+              "uri": "https://example.org/files/report.pdf"
+            }
+          ],
+          "mimetype": "application/pdf",
+          "lang": "en",
+          "published": "2024-03-01T12:00:00Z",
+          "last_seen": "2024-06-01T09:30:00Z",
+          "score": 0.87
         }
       },
       {
@@ -149,6 +179,27 @@
           "text": "x",
           "size_min": 100,
           "size_max": 1
+        }
+      },
+      {
+        "name": "empty_extension",
+        "value": {
+          "text": "x",
+          "extensions": [""]
+        }
+      },
+      {
+        "name": "mimetypes_wrong_type",
+        "value": {
+          "text": "x",
+          "mimetypes": "application/pdf"
+        }
+      },
+      {
+        "name": "empty_filename",
+        "value": {
+          "text": "x",
+          "filename": ""
         }
       }
     ],

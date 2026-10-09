@@ -2,24 +2,47 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Provider-specific passthrough / forward-compatible extras.
+///
+/// Keys SHOULD be namespaced (`provider.key`) to avoid collisions between
+/// independent providers.
 pub type Extras = serde_json::Map<String, serde_json::Value>;
 
 /// Map of hash algorithm name to value, e.g. `{"sha256": "...", "infohash": "..."}`.
 pub type HashAlgos = HashMap<String, String>;
 
 /// The one network-agnostic query shape.
+///
+/// Every selector is optional except `text`; providers apply what they support
+/// best-effort and must still return text matches when a filter is unsupported.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FileQuery {
     /// Free-text keywords. May be empty when another selector is present.
     pub text: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hashes: Option<HashAlgos>,
+    /// Accepted media types: full (`application/pdf`), top-level (`image`), or
+    /// wildcarded (`image/*`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub mimetype: Option<String>,
+    pub mimetypes: Option<Vec<String>>,
+    /// Accepted file extensions, lowercase, no leading dot (`pdf`, `jpg`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extensions: Option<Vec<String>>,
+    /// Filename or glob pattern (e.g. `*annual*report*.pdf`). Best-effort.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filename: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub size_min: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub size_max: Option<u64>,
+    /// Only results published at/after this instant (RFC 3339 UTC).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub published_after: Option<String>,
+    /// Only results published at/before this instant (RFC 3339 UTC).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub published_before: Option<String>,
+    /// Preferred language (BCP 47, e.g. `en`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lang: Option<String>,
     /// Max results per provider (best-effort).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub limit: Option<u32>,
@@ -32,9 +55,14 @@ impl FileQuery {
         Self {
             text: text.into(),
             hashes: None,
-            mimetype: None,
+            mimetypes: None,
+            extensions: None,
+            filename: None,
             size_min: None,
             size_max: None,
+            published_after: None,
+            published_before: None,
+            lang: None,
             limit: None,
             extras: None,
         }
@@ -84,6 +112,18 @@ pub struct FileResult {
     pub hashes: Option<HashAlgos>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mimetype: Option<String>,
+    /// Language of the content (BCP 47).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lang: Option<String>,
+    /// When the content was published (RFC 3339 UTC).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub published: Option<String>,
+    /// When the provider last saw it available (RFC 3339 UTC).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_seen: Option<String>,
+    /// Provider-local relevance. NOT comparable across providers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub score: Option<f64>,
     /// Untouched original payload. Never interpreted by the core.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub raw: Option<serde_json::Value>,
@@ -98,6 +138,10 @@ impl FileResult {
             size: None,
             hashes: None,
             mimetype: None,
+            lang: None,
+            published: None,
+            last_seen: None,
+            score: None,
             raw: None,
         }
     }
@@ -167,6 +211,7 @@ pub struct Failure {
 }
 
 /// What the engine streams: either a hit or a provider failure.
+#[allow(clippy::large_enum_variant)] // a ~280-byte move beats a per-item allocation
 #[derive(Debug, Clone, PartialEq)]
 pub enum Outcome {
     Result(FileResult),
@@ -176,14 +221,14 @@ pub enum Outcome {
 impl Outcome {
     pub fn provider(&self) -> &str {
         match self {
-            Outcome::Result(r) => &r.provider,
-            Outcome::Failure(f) => &f.provider,
+            Outcome::Result(result) => &result.provider,
+            Outcome::Failure(failure) => &failure.provider,
         }
     }
 
     pub fn as_result(&self) -> Option<&FileResult> {
         match self {
-            Outcome::Result(r) => Some(r),
+            Outcome::Result(result) => Some(result),
             Outcome::Failure(_) => None,
         }
     }
@@ -191,7 +236,7 @@ impl Outcome {
     pub fn as_failure(&self) -> Option<&Failure> {
         match self {
             Outcome::Result(_) => None,
-            Outcome::Failure(f) => Some(f),
+            Outcome::Failure(failure) => Some(failure),
         }
     }
 }
@@ -216,6 +261,29 @@ impl Validate for FileQuery {
         if let (Some(min), Some(max)) = (self.size_min, self.size_max) {
             if min > max {
                 return Err(ValidationError::SizeRange { min, max });
+            }
+        }
+        if let Some(mimetypes) = &self.mimetypes {
+            if mimetypes.iter().any(|mimetype| mimetype.trim().is_empty()) {
+                return Err(ValidationError::Empty("mimetypes entry"));
+            }
+        }
+        if let Some(extensions) = &self.extensions {
+            if extensions
+                .iter()
+                .any(|extension| extension.trim().is_empty())
+            {
+                return Err(ValidationError::Empty("extensions entry"));
+            }
+        }
+        if let Some(filename) = &self.filename {
+            if filename.trim().is_empty() {
+                return Err(ValidationError::Empty("filename"));
+            }
+        }
+        if let Some(lang) = &self.lang {
+            if lang.trim().is_empty() {
+                return Err(ValidationError::Empty("lang"));
             }
         }
         Ok(())
