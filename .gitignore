@@ -6,3 +6,7 @@ CLAUDE.md
 .agents/
 .handoff/
 scratch/
+
+# Rust
+/target/
+**/*.rs.bk

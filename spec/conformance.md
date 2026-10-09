@@ -8,7 +8,8 @@ described here so they can be implemented in any language.
 
 Using `vectors.json`:
 
-- `valid.*` — MUST be accepted and round-trip without loss.
+- `valid.*` — MUST be accepted and validated. Known fields MUST round-trip
+  without loss; unknown fields are ignored (not an error).
 - `invalid.*` — MUST be rejected with a clear validation error.
 - Unknown fields at any level MUST be ignored, not rejected.
 

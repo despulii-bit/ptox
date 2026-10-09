@@ -26,6 +26,16 @@ Everything else is separate software built on this contract:
 - `spec/core-contract.md` — the locked, language-neutral contract.
 - `spec/conformance.md` — what any implementation must satisfy.
 - `spec/vectors.json` — language-neutral test vectors.
+- `crates/cwm-core` — the Rust implementation of the core.
+
+## Development
+
+Rust is provided by Nix (see `shell.nix`):
+
+```sh
+nix-shell --run 'cargo test --workspace'
+nix-shell --run 'cargo clippy --workspace --all-targets -- -D warnings'
+```
 
 ## Development files
 
@@ -34,4 +44,5 @@ repo so that cloning this program never pulls in unrelated files.
 
 ## Status
 
-Contract v0 locked; no implementation yet (language not yet chosen).
+Contract v0 locked; Rust core implemented; conformance suite green. No providers
+or frontends yet — those are separate software.

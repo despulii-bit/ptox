@@ -1,137 +1,253 @@
 {
   "contract_version": "0",
   "valid": {
-    "file_query_keywords": {
-      "text": "blade runner 2049 1080p",
-      "limit": 50
-    },
-    "file_query_with_hash": {
-      "text": "",
-      "hashes": {
-        "infohash": "0123456789abcdef0123456789abcdef01234567"
-      }
-    },
-    "file_query_full": {
-      "text": "annual report",
-      "mimetype": "application/pdf",
-      "size_min": 1024,
-      "size_max": 104857600,
-      "limit": 25,
-      "extras": {
-        "lang": "en"
-      }
-    },
-    "address_magnet": {
-      "scheme": "magnet",
-      "uri": "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567",
-      "hashes": {
-        "infohash": "0123456789abcdef0123456789abcdef01234567"
+    "file_query": [
+      {
+        "name": "keywords",
+        "value": {
+          "text": "blade runner 2049 1080p",
+          "limit": 50
+        }
       },
-      "extras": {}
-    },
-    "address_ipfs": {
-      "scheme": "ipfs",
-      "uri": "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi"
-    },
-    "address_http": {
-      "scheme": "https",
-      "uri": "https://example.org/files/report.pdf",
-      "hashes": {
-        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      {
+        "name": "with_hash",
+        "value": {
+          "text": "",
+          "hashes": {
+            "infohash": "0123456789abcdef0123456789abcdef01234567"
+          }
+        }
       },
-      "size": 20480
-    },
-    "file_result": {
-      "provider": "example-net",
-      "title": "example.mkv",
-      "addresses": [
-        {
+      {
+        "name": "full",
+        "value": {
+          "text": "annual report",
+          "mimetype": "application/pdf",
+          "size_min": 1024,
+          "size_max": 104857600,
+          "limit": 25,
+          "extras": {
+            "lang": "en"
+          }
+        }
+      },
+      {
+        "name": "unknown_fields_tolerated",
+        "value": {
+          "text": "anything",
+          "future_field": true
+        }
+      }
+    ],
+    "address": [
+      {
+        "name": "magnet",
+        "value": {
           "scheme": "magnet",
-          "uri": "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567"
+          "uri": "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567",
+          "hashes": {
+            "infohash": "0123456789abcdef0123456789abcdef01234567"
+          },
+          "extras": {}
         }
-      ],
-      "size": 1234567,
-      "hashes": {
-        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-      }
-    },
-    "file_result_unknown_fields": {
-      "provider": "example-net",
-      "title": "example.mkv",
-      "addresses": [
-        {
+      },
+      {
+        "name": "ipfs",
+        "value": {
           "scheme": "ipfs",
-          "uri": "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi",
-          "future_field": 123
+          "uri": "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi"
         }
-      ],
-      "some_future_top_level_field": {
-        "nested": true
+      },
+      {
+        "name": "http",
+        "value": {
+          "scheme": "https",
+          "uri": "https://example.org/files/report.pdf",
+          "hashes": {
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "size": 20480
+        }
       }
-    },
-    "failure": {
-      "provider": "example-net",
-      "error": {
-        "code": "timeout",
-        "message": "no response within 5000ms"
+    ],
+    "file_result": [
+      {
+        "name": "basic",
+        "value": {
+          "provider": "example-net",
+          "title": "example.mkv",
+          "addresses": [
+            {
+              "scheme": "magnet",
+              "uri": "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567"
+            }
+          ],
+          "size": 1234567,
+          "hashes": {
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        }
+      },
+      {
+        "name": "unknown_fields_tolerated",
+        "value": {
+          "provider": "example-net",
+          "title": "example.mkv",
+          "addresses": [
+            {
+              "scheme": "ipfs",
+              "uri": "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi",
+              "future_field": 123
+            }
+          ],
+          "some_future_top_level_field": {
+            "nested": true
+          }
+        }
       }
-    },
-    "failure_unknown_code": {
-      "provider": "example-net",
-      "error": {
-        "code": "some_future_code",
-        "message": "tolerated"
+    ],
+    "failure": [
+      {
+        "name": "timeout",
+        "value": {
+          "provider": "example-net",
+          "error": {
+            "code": "timeout",
+            "message": "no response within 5000ms"
+          }
+        }
+      },
+      {
+        "name": "unknown_code_tolerated",
+        "value": {
+          "provider": "example-net",
+          "error": {
+            "code": "some_future_code",
+            "message": "tolerated"
+          }
+        }
       }
-    }
+    ]
   },
   "invalid": {
-    "file_query_missing_text": {
-      "limit": 10
-    },
-    "file_query_text_wrong_type": {
-      "text": 42
-    },
-    "address_missing_scheme": {
-      "uri": "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567"
-    },
-    "address_empty_scheme": {
-      "scheme": "",
-      "uri": "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567"
-    },
-    "address_missing_uri": {
-      "scheme": "magnet"
-    },
-    "address_empty_uri": {
-      "scheme": "magnet",
-      "uri": ""
-    },
-    "file_result_missing_provider": {
-      "title": "x",
-      "addresses": [
-        {
-          "scheme": "https",
-          "uri": "https://example.org/f"
+    "file_query": [
+      {
+        "name": "missing_text",
+        "value": {
+          "limit": 10
         }
-      ]
-    },
-    "file_result_empty_provider": {
-      "provider": "",
-      "addresses": [
-        {
-          "scheme": "https",
-          "uri": "https://example.org/f"
+      },
+      {
+        "name": "text_wrong_type",
+        "value": {
+          "text": 42
         }
-      ]
-    },
-    "file_result_missing_addresses": {
-      "provider": "example-net"
-    },
-    "file_result_empty_addresses": {
-      "provider": "example-net",
-      "addresses": []
-    },
-    "failure_missing_error": {
-      "provider": "example-net"
-    }
+      },
+      {
+        "name": "size_range_inverted",
+        "value": {
+          "text": "x",
+          "size_min": 100,
+          "size_max": 1
+        }
+      }
+    ],
+    "address": [
+      {
+        "name": "missing_scheme",
+        "value": {
+          "uri": "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567"
+        }
+      },
+      {
+        "name": "empty_scheme",
+        "value": {
+          "scheme": "",
+          "uri": "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567"
+        }
+      },
+      {
+        "name": "missing_uri",
+        "value": {
+          "scheme": "magnet"
+        }
+      },
+      {
+        "name": "empty_uri",
+        "value": {
+          "scheme": "magnet",
+          "uri": ""
+        }
+      }
+    ],
+    "file_result": [
+      {
+        "name": "missing_provider",
+        "value": {
+          "title": "x",
+          "addresses": [
+            {
+              "scheme": "https",
+              "uri": "https://example.org/f"
+            }
+          ]
+        }
+      },
+      {
+        "name": "empty_provider",
+        "value": {
+          "provider": "",
+          "addresses": [
+            {
+              "scheme": "https",
+              "uri": "https://example.org/f"
+            }
+          ]
+        }
+      },
+      {
+        "name": "missing_addresses",
+        "value": {
+          "provider": "example-net"
+        }
+      },
+      {
+        "name": "empty_addresses",
+        "value": {
+          "provider": "example-net",
+          "addresses": []
+        }
+      },
+      {
+        "name": "address_with_empty_uri",
+        "value": {
+          "provider": "example-net",
+          "addresses": [
+            {
+              "scheme": "https",
+              "uri": ""
+            }
+          ]
+        }
+      }
+    ],
+    "failure": [
+      {
+        "name": "missing_error",
+        "value": {
+          "provider": "example-net"
+        }
+      },
+      {
+        "name": "empty_provider",
+        "value": {
+          "provider": "",
+          "error": {
+            "code": "timeout",
+            "message": "x"
+          }
+        }
+      }
+    ]
   }
 }
