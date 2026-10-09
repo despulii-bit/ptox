@@ -29,7 +29,9 @@ Everything else is separate software built on this contract:
 - `spec/conformance.md` — what any implementation must satisfy.
 - `spec/vectors.json` — language-neutral test vectors.
 - `crates/cwm-core` — the Rust implementation of the core.
-- `crates/cwm-provider-btdht` — reference provider: BitTorrent DHT infohash→peers.
+
+Providers are separate software with their own repos, e.g.
+[`cwm-provider-btdht`](https://github.com/despulii-bit/cwm-provider-btdht).
 
 ## Development
 
@@ -48,9 +50,10 @@ A provider is one network or index. Two ways to plug one in:
 - **Any language:** speak the NDJSON wire format (contract §9) and wrap the
   program with `SubprocessProvider` — the child is killed on cancellation.
 
-The first reference provider is `crates/cwm-provider-btdht`. It resolves an
-infohash or magnet to peers and returns a magnet `Address`; keyword queries are
-`unsupported`, because the DHT is a hash table, not a keyword index.
+The first reference provider lives in its own repo,
+[`cwm-provider-btdht`](https://github.com/despulii-bit/cwm-provider-btdht). It
+resolves an infohash or magnet to peers and returns a magnet `Address`; keyword
+queries are `unsupported`, because the DHT is a hash table, not a keyword index.
 
 See `crates/cwm-core/examples/ndjson_provider.rs` for a minimal wire provider.
 
@@ -62,9 +65,8 @@ repo so that cloning this program never pulls in unrelated files.
 ## Status
 
 Contract v0 locked; Rust core implemented (fan-out, streaming, isolation,
-timeout, cancellation, NDJSON subprocess bridge); BitTorrent DHT provider
-(infohash → peers); 27 tests green. Keyword search over BitTorrent and all
-frontends are separate software.
+timeout, cancellation, NDJSON subprocess bridge); 15 tests green. Providers
+(e.g. BitTorrent DHT), keyword search, and all frontends are separate software.
 
 ## Contributing
 

@@ -41,7 +41,7 @@ cargo test --workspace
 - `spec/conformance.md` — the behavior every implementation must satisfy.
 - `spec/vectors.json` — language-neutral data-validation vectors.
 - `crates/cwm-core` — the core: types, `SearchProvider`, `fanout`, NDJSON bridge.
-- `crates/cwm-provider-btdht` — reference provider (BitTorrent DHT).
+- Providers live in **separate repos**, e.g. `cwm-provider-btdht`.
 
 ## Writing a provider
 
