@@ -1,4 +1,4 @@
-//! The **search half** of cwm: the [`SearchProvider`] contract and the [`fanout`]
+//! The **search half** of ptox: the [`SearchProvider`] contract and the [`fanout`]
 //! engine that runs providers concurrently and streams attributed results.
 
 pub mod capabilities;

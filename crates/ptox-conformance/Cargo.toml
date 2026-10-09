@@ -1,6 +1,6 @@
 [package]
-name = "cwm-conformance"
-description = "Contract conformance suite for cwm providers (in-process or NDJSON)."
+name = "ptox-conformance"
+description = "Contract conformance suite for ptox providers (in-process or NDJSON)."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,11 +8,11 @@ rust-version.workspace = true
 publish = false
 
 [[bin]]
-name = "cwm-conformance"
+name = "ptox-conformance"
 path = "src/main.rs"
 
 [dependencies]
-cwm = { path = "../cwm", default-features = false }
+ptox = { path = "../ptox", default-features = false }
 futures = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -20,6 +20,6 @@ tokio = { version = "1", features = ["io-util", "macros", "process", "rt", "rt-m
 
 [dev-dependencies]
 async-stream = "0.3"
-cwm = { path = "../cwm", default-features = false }
+ptox = { path = "../ptox", default-features = false }
 jsonschema = { version = "0.18", default-features = false }
 tokio = { version = "1", features = ["io-util", "macros", "process", "rt-multi-thread", "time"] }

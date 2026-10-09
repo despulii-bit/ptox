@@ -1,5 +1,5 @@
-use cwm::{Address, FileQuery, FileResult, ResultStream, SearchProvider};
-use cwm_conformance::{check_command, check_in_process, Options};
+use ptox::{Address, FileQuery, FileResult, ResultStream, SearchProvider};
+use ptox_conformance::{check_command, check_in_process, Options};
 use std::path::PathBuf;
 use std::time::Duration;
 

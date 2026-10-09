@@ -1,13 +1,13 @@
-//! # cwm-conformance
+//! # ptox-conformance
 //!
-//! A contract conformance suite for cwm providers. It validates that a provider —
+//! A contract conformance suite for ptox providers. It validates that a provider —
 //! written in Rust (`check_in_process`) or as a subprocess speaking the NDJSON
 //! wire format (`check_command`) — obeys `spec/core-contract.md`.
 //!
-//! Use it as a library or via the `cwm-conformance` binary:
+//! Use it as a library or via the `ptox-conformance` binary:
 //!
 //! ```sh
-//! cwm-conformance -- cwm-provider-example --config /etc/example.conf
+//! ptox-conformance -- ptox-provider-example --config /etc/example.conf
 //! ```
 
 #![forbid(unsafe_code)]
@@ -20,7 +20,7 @@ pub use command::check_command;
 pub use in_process::check_in_process;
 pub use report::{Check, Report};
 
-use cwm::FileQuery;
+use ptox::FileQuery;
 use std::time::Duration;
 
 /// What to run the provider against.
@@ -39,7 +39,7 @@ impl Default for Options {
         Self {
             queries: vec![FileQuery::new("conformance test")],
             timeout: Duration::from_secs(10),
-            max_line_bytes: cwm::MAX_LINE_BYTES,
+            max_line_bytes: ptox::MAX_LINE_BYTES,
         }
     }
 }

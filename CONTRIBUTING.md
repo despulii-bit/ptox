@@ -1,4 +1,4 @@
-# Contributing to cwm
+# Contributing to ptox
 
 Thanks for helping build a composable, multi-network file-search core.
 
@@ -40,11 +40,11 @@ cargo test --workspace
 - `spec/core-contract.md` — the locked, language-neutral contract.
 - `spec/conformance.md` — the behavior every implementation must satisfy.
 - `spec/vectors.json` — language-neutral data-validation vectors.
-- `crates/cwm` — the SDK: `types`, `search`, `provider`, `fetch`, and `merge` modules.
-- `crates/cwm-conformance` — provider conformance suite.
+- `crates/ptox` — the SDK: `types`, `search`, `provider`, `fetch`, and `merge` modules.
+- `crates/ptox-conformance` — provider conformance suite.
 
 Providers live in **separate repos** (or, for development, the private lab).
-- Providers live in **separate repos**, e.g. `cwm-provider-btdht`.
+- Providers live in **separate repos**, e.g. `ptox-provider-btdht`.
 
 ## Writing a provider
 
@@ -69,7 +69,7 @@ injected at construction, never per query.
 
 Speak the NDJSON wire format (`spec/core-contract.md` §9) and wrap the program
 with `SubprocessProvider`. See
-`crates/cwm/examples/ndjson_provider.rs` for a minimal example.
+`crates/ptox/examples/ndjson_provider.rs` for a minimal example.
 
 ### Provider checklist
 
@@ -83,7 +83,7 @@ with `SubprocessProvider`. See
 Validate any provider (any language) with the conformance suite:
 
 ```sh
-cargo run -p cwm-conformance -- -- <provider-command> [args...]
+cargo run -p ptox-conformance -- -- <provider-command> [args...]
 ```
 
 It checks spawning, wire-line validity, result shape, error shape, and

@@ -1,5 +1,5 @@
-use cwm::FileQuery;
-use cwm_conformance::{check_command, Options, Report};
+use ptox::FileQuery;
+use ptox_conformance::{check_command, Options, Report};
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::Duration;
@@ -9,7 +9,7 @@ async fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
 
     let mut timeout = Duration::from_secs(10);
-    let mut max_line_bytes = cwm::MAX_LINE_BYTES;
+    let mut max_line_bytes = ptox::MAX_LINE_BYTES;
     let mut query_texts: Vec<String> = Vec::new();
     let mut json = false;
     let mut command: Vec<String> = Vec::new();
@@ -116,10 +116,10 @@ fn print_report(report: &Report, json: bool) {
 }
 
 fn usage() -> &'static str {
-    "cwm-conformance — contract conformance for cwm providers
+    "ptox-conformance — contract conformance for ptox providers
 
 USAGE:
-    cwm-conformance [OPTIONS] -- <command> [args...]
+    ptox-conformance [OPTIONS] -- <command> [args...]
 
 OPTIONS:
     --timeout <SECS>        per-query time budget (default 10)

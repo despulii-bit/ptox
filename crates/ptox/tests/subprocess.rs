@@ -1,10 +1,10 @@
 //! Conformance item I: out-of-process providers over the NDJSON wire format.
 
-use cwm::{
+use futures::StreamExt;
+use ptox::{
     fanout, Capabilities, ErrorCode, FileQuery, Options, Outcome, SearchProvider,
     SubprocessProvider,
 };
-use futures::StreamExt;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -71,7 +71,7 @@ async fn passes_environment_to_the_provider() {
     let outcomes = collect(fanout(
         FileQuery::new("hello"),
         providers(vec![
-            SubprocessProvider::new("example", bin).env("CWM_EXAMPLE_TAG", "TAG")
+            SubprocessProvider::new("example", bin).env("PTOX_EXAMPLE_TAG", "TAG")
         ]),
         Options::default(),
     ))

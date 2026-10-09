@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/despulii-bit/cwm/spec/schema/wire.schema.json",
-  "title": "cwm wire protocol v2",
-  "description": "NDJSON messages exchanged between a cwm host and a provider.",
+  "$id": "https://github.com/despulii-bit/ptox/spec/schema/wire.schema.json",
+  "title": "ptox wire protocol v2",
+  "description": "NDJSON messages exchanged between a ptox host and a provider.",
   "$defs": {
     "HashAlgos": {
       "type": "object",

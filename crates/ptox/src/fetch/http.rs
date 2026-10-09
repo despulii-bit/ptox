@@ -6,9 +6,9 @@ use tokio::io::AsyncWriteExt;
 
 /// A descriptive default; many hosts (Wikimedia, etc.) reject requests without one.
 const DEFAULT_USER_AGENT: &str = concat!(
-    "cwm/",
+    "ptox/",
     env!("CARGO_PKG_VERSION"),
-    " (+https://github.com/despulii-bit/cwm)"
+    " (+https://github.com/despulii-bit/ptox)"
 );
 
 /// Fetches `http`/`https` URLs. Writes atomically and verifies sha256.

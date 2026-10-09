@@ -52,7 +52,7 @@ fn main() {
                 .ok()
                 .and_then(|value| value["params"]["query"]["text"].as_str().map(str::to_owned))
                 .unwrap_or_default();
-            let tag = std::env::var("CWM_EXAMPLE_TAG").unwrap_or_default();
+            let tag = std::env::var("PTOX_EXAMPLE_TAG").unwrap_or_default();
             let prefix = if tag.is_empty() {
                 String::new()
             } else {

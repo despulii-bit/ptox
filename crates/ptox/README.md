@@ -1,4 +1,4 @@
-# cwm
+# ptox
 
 A language-neutral **SDK for building file-search clients across many networks**
 (clearnet, I2P, Freenet/Hyphanet, IPFS, BitTorrent, …).
@@ -13,9 +13,9 @@ It provides the contracts, engines, and tooling a client builds on:
   be written in any language.
 
 ```rust
-# async fn run(providers: Vec<std::sync::Arc<dyn cwm::SearchProvider>>) {
-let engine = cwm::Engine::new(providers);
-let report = engine.search(cwm::FileQuery::new("annual report")).await;
+# async fn run(providers: Vec<std::sync::Arc<dyn ptox::SearchProvider>>) {
+let engine = ptox::Engine::new(providers);
+let report = engine.search(ptox::FileQuery::new("annual report")).await;
 for result in &report.results {
     println!("{:?} from {:?}", result.title, result.providers);
 }
@@ -27,7 +27,7 @@ bytes: `Engine::fetch(&result, "out.bin").await`.
 
 Providers (network plugins) and clients (frontends) are separate software. The
 contract, JSON Schema, and conformance suite live in the repository:
-<https://github.com/despulii-bit/cwm>.
+<https://github.com/despulii-bit/ptox>.
 
 ## License
 

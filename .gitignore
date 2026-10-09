@@ -1,5 +1,5 @@
 # Agent / development-only paths — never tracked in the program repo.
-# Agent scaffolding lives in a separate repo (../cwm-agents).
+# Agent scaffolding lives in a separate repo (../ptox-agents).
 AGENTS.md
 CLAUDE.md
 .pi/

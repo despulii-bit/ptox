@@ -1,12 +1,12 @@
-//! The **retrieval half** of cwm: turn a [`crate::types::Address`] into bytes on disk.
+//! The **retrieval half** of ptox: turn a [`crate::types::Address`] into bytes on disk.
 //!
 //! The search fabric emits `Address`es; this fabric consumes them. Fetchers are
 //! registered per scheme, so retrieval is pluggable exactly like search.
 //!
 //! ```no_run
-//! # async fn run() -> Result<(), cwm::FetchError> {
-//! use cwm::Address;
-//! let registry = cwm::FetchRegistry::with_defaults();
+//! # async fn run() -> Result<(), ptox::FetchError> {
+//! use ptox::Address;
+//! let registry = ptox::FetchRegistry::with_defaults();
 //! let address = Address::new("https", "https://example.org/file.bin");
 //! let fetched = registry.fetch(&address, "file.bin", None).await?;
 //! println!("{} bytes -> {}", fetched.bytes, fetched.path.display());

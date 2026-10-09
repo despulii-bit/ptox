@@ -4,9 +4,9 @@
 //! with the `fetch` feature, retrieval. A client is then a few lines:
 //!
 //! ```no_run
-//! # async fn run(providers: Vec<std::sync::Arc<dyn cwm::SearchProvider>>) {
-//! let engine = cwm::Engine::new(providers);
-//! let report = engine.search(cwm::FileQuery::new("annual report")).await;
+//! # async fn run(providers: Vec<std::sync::Arc<dyn ptox::SearchProvider>>) {
+//! let engine = ptox::Engine::new(providers);
+//! let report = engine.search(ptox::FileQuery::new("annual report")).await;
 //! for result in &report.results {
 //!     println!("{:?} from {:?}", result.title, result.providers);
 //! }

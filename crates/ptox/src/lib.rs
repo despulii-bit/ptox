@@ -1,6 +1,6 @@
-//! # cwm
+//! # ptox
 //!
-//! The **cwm SDK** — a language-neutral toolkit for building file-search clients
+//! The **ptox SDK** — a language-neutral toolkit for building file-search clients
 //! that work across many networks. It has three parts:
 //!
 //! - **Contracts** — [`types`] (`FileQuery`, `FileResult`, `Address`, …), the
@@ -8,7 +8,7 @@
 //! - **Engines** — [`search::fanout`], the [`fetch::FetchRegistry`], and the
 //!   [`merge`] post-processor.
 //! - **Tooling** — the NDJSON [`provider`] bridge (the conformance suite is the
-//!   separate `cwm-conformance` crate).
+//!   separate `ptox-conformance` crate).
 //!
 //! Providers (network plugins) and clients (frontends) are built on top.
 #![forbid(unsafe_code)]

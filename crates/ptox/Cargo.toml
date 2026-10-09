@@ -1,11 +1,11 @@
 [package]
-name = "cwm"
+name = "ptox"
 description = "A language-neutral SDK for building file-search clients across many networks."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
-repository = "https://github.com/despulii-bit/cwm"
+repository = "https://github.com/despulii-bit/ptox"
 readme = "README.md"
 keywords = ["search", "file-search", "federation", "p2p", "sdk"]
 categories = ["network-programming"]

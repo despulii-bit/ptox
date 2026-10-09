@@ -1,8 +1,8 @@
-use cwm::{
+use futures::StreamExt;
+use ptox::{
     fanout, Address, ErrorCode, FileQuery, FileResult, Options, Outcome, ProviderError,
     ResultStream, SearchProvider,
 };
-use futures::StreamExt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;

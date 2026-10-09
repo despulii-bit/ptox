@@ -1,6 +1,6 @@
 #![cfg(feature = "fetch")]
 
-use cwm::{sha256_hex, Address, CommandFetcher, FetchError, FetchRegistry};
+use ptox::{sha256_hex, Address, CommandFetcher, FetchError, FetchRegistry};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -27,7 +27,7 @@ async fn serve_once(body: &'static [u8]) -> String {
 }
 
 fn temp_dest(tag: &str) -> PathBuf {
-    std::env::temp_dir().join(format!("cwm-fetch-{}-{tag}", std::process::id()))
+    std::env::temp_dir().join(format!("ptox-fetch-{}-{tag}", std::process::id()))
 }
 
 #[tokio::test]

@@ -63,7 +63,7 @@ fn valid_spec_vectors_conform_to_the_schema() {
 
 #[test]
 fn rust_output_conforms_to_the_wire_schema() {
-    use cwm::{encode_request, Address, ErrorInfo, Failure, FileQuery, FileResult};
+    use ptox::{encode_request, Address, ErrorInfo, Failure, FileQuery, FileResult};
     let root = schema();
 
     let request: Value = serde_json::from_str(

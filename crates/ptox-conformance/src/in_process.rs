@@ -1,6 +1,6 @@
 use crate::{Options, Report};
-use cwm::{SearchProvider, Validate};
 use futures::StreamExt;
+use ptox::{SearchProvider, Validate};
 
 /// Run the contract checks against an in-process provider.
 pub async fn check_in_process(
