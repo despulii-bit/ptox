@@ -37,6 +37,16 @@ nix-shell --run 'cargo test --workspace'
 nix-shell --run 'cargo clippy --workspace --all-targets -- -D warnings'
 ```
 
+## Writing a provider
+
+A provider is one network or index. Two ways to plug one in:
+
+- **Rust:** implement the `SearchProvider` trait and pass it to `fanout`.
+- **Any language:** speak the NDJSON wire format (contract §9) and wrap the
+  program with `SubprocessProvider` — the child is killed on cancellation.
+
+See `crates/cwm-core/examples/ndjson_provider.rs` for a minimal wire provider.
+
 ## Development files
 
 Agent/development scaffolding does **not** live here. It is tracked in a separate
@@ -44,5 +54,6 @@ repo so that cloning this program never pulls in unrelated files.
 
 ## Status
 
-Contract v0 locked; Rust core implemented; conformance suite green. No providers
-or frontends yet — those are separate software.
+Contract v0 locked; Rust core implemented (fan-out, streaming, isolation,
+timeout, cancellation, NDJSON subprocess bridge); 15 tests green. No providers or
+frontends yet — those are separate software.

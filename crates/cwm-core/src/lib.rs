@@ -12,11 +12,15 @@
 
 mod fanout;
 mod provider;
+mod subprocess;
 mod types;
+mod wire;
 
 pub use fanout::{fanout, Options};
 pub use provider::{ProviderError, ResultStream, SearchProvider};
+pub use subprocess::SubprocessProvider;
 pub use types::{
     Address, ErrorCode, ErrorInfo, Extras, Failure, FileQuery, FileResult, HashAlgos, Outcome,
     Validate, ValidationError,
 };
+pub use wire::{encode_request, parse_line, WireLine};

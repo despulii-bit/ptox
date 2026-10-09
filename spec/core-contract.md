@@ -142,6 +142,7 @@ Result line (one per result):
 ```
 {"id": 1, "result": <FileResult>}
 ```
+The host MUST set `provider` on each result to the provider's configured name.
 
 Provider failure:
 ```
