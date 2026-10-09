@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/cwm-core"]
+members = ["crates/cwm-core", "crates/cwm-conformance"]
 
 [workspace.package]
 version = "0.0.0"

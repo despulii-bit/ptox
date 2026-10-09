@@ -77,6 +77,15 @@ with `SubprocessProvider`. See
 - [ ] Preserves the `raw` payload.
 - [ ] Contains no secrets and performs no network access in tests.
 
+Validate any provider (any language) with the conformance suite:
+
+```sh
+cargo run -p cwm-conformance -- -- <provider-command> [args...]
+```
+
+It checks spawning, wire-line validity, result shape, error shape, and
+termination, and exits nonzero on failure.
+
 ## Tests and CI
 
 Every pull request must pass:

@@ -70,7 +70,9 @@ impl Address {
 /// A normalized, attributed search hit.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FileResult {
-    /// Attribution: which provider produced it. Never empty.
+    /// Attribution: which provider produced it. Never empty once filled.
+    /// Providers MAY omit this on the wire; the host sets it (contract §9).
+    #[serde(default)]
     pub provider: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,

@@ -2,7 +2,8 @@
 
 Any implementation of the core contract (`core-contract.md`) must pass these
 tests. Data-validation vectors are in `vectors.json`. Behavior tests are
-described here so they can be implemented in any language.
+described here so they can be implemented in any language. Provider-facing
+checks are implemented by `cwm-conformance` (`crates/cwm-conformance`).
 
 ## A. Data validation
 

@@ -54,13 +54,16 @@ ecosystem depends on.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `provider` | string | **yes** | Attribution: which provider produced it. Non-empty. |
+| `provider` | string | **yes\*** | Attribution. Providers MAY omit it on the wire; the host MUST set it (§9). Validation requires it non-empty. |
 | `title` | string | no | Display name / filename. |
 | `addresses` | `[Address]` | **yes** | Non-empty. Ways to obtain it. |
 | `size` | int | no | Bytes. |
 | `hashes` | `{algo: value}` | no | Content digests for the result as a whole. |
 | `mimetype` | string | no | |
 | `raw` | `any` | no | Untouched original payload. Never interpreted by the core. |
+
+On the wire a provider may omit `provider`; the host fills it in with the
+provider's configured name. Once filled, it must be non-empty.
 
 ---
 
