@@ -1,6 +1,6 @@
-use crate::provider::SearchProvider;
+use super::provider::SearchProvider;
+use crate::types::{ErrorCode, ErrorInfo, Failure, FileQuery, Outcome};
 use async_stream::stream;
-use cwm_types::{ErrorCode, ErrorInfo, Failure, FileQuery, Outcome};
 use futures::{Stream, StreamExt};
 use std::sync::Arc;
 use std::time::Duration;

@@ -201,10 +201,16 @@ dependencies = [
 name = "cwm"
 version = "0.0.0"
 dependencies = [
- "cwm-fetch",
- "cwm-provider",
- "cwm-search",
- "cwm-types",
+ "async-stream",
+ "async-trait",
+ "futures",
+ "hex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 1.0.69",
+ "tokio",
 ]
 
 [[package]]
@@ -212,63 +218,12 @@ name = "cwm-conformance"
 version = "0.0.0"
 dependencies = [
  "async-stream",
- "cwm-provider",
- "cwm-search",
- "cwm-types",
+ "cwm",
  "futures",
  "jsonschema",
  "serde",
  "serde_json",
  "tokio",
-]
-
-[[package]]
-name = "cwm-fetch"
-version = "0.0.0"
-dependencies = [
- "async-trait",
- "cwm-types",
- "futures",
- "hex",
- "reqwest",
- "sha2",
- "thiserror 1.0.69",
- "tokio",
-]
-
-[[package]]
-name = "cwm-provider"
-version = "0.0.0"
-dependencies = [
- "async-stream",
- "cwm-search",
- "cwm-types",
- "futures",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tokio",
-]
-
-[[package]]
-name = "cwm-search"
-version = "0.0.0"
-dependencies = [
- "async-stream",
- "cwm-types",
- "futures",
- "serde",
- "thiserror 1.0.69",
- "tokio",
-]
-
-[[package]]
-name = "cwm-types"
-version = "0.0.0"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror 1.0.69",
 ]
 
 [[package]]

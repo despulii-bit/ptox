@@ -1,4 +1,4 @@
-use cwm_types::{Address, Failure, FileQuery, FileResult, Validate};
+use cwm::{Address, Failure, FileQuery, FileResult, Validate};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::Value;

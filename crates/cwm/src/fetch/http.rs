@@ -1,4 +1,4 @@
-use crate::{temp_path, verify_sha256, FetchError, FetchRequest, Fetched, Fetcher};
+use super::{temp_path, verify_sha256, FetchError, FetchRequest, Fetched, Fetcher};
 use async_trait::async_trait;
 use futures::StreamExt;
 use sha2::{Digest, Sha256};

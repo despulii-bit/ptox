@@ -1,17 +1,27 @@
 //! # cwm
 //!
-//! The **cwm SDK** — the single dependency a client builds on. Re-exports:
+//! The **cwm SDK** — a language-neutral toolkit for building file-search clients
+//! that work across many networks. It has three parts:
 //!
-//! - [`cwm_types`] — the data contracts.
-//! - [`cwm_search`] — the search engine and `SearchProvider` contract.
-//! - [`cwm_provider`] — the NDJSON provider bridge and `SubprocessProvider`.
-//! - [`cwm_fetch`] — the retrieval fabric and `Fetcher` contract.
+//! - **Contracts** — [`types`] (`FileQuery`, `FileResult`, `Address`, …), the
+//!   [`search::SearchProvider`] trait, and the [`fetch::Fetcher`] trait.
+//! - **Engines** — [`search::fanout`] and the [`fetch::FetchRegistry`].
+//! - **Tooling** — the NDJSON [`provider`] bridge (the conformance suite is the
+//!   separate `cwm-conformance` crate).
 //!
-//! Providers (network plugins) and clients (frontends) are built on top and live
-//! in their own repos.
+//! Providers (network plugins) and clients (frontends) are built on top.
 #![forbid(unsafe_code)]
 
-pub use cwm_fetch::*;
-pub use cwm_provider::*;
-pub use cwm_search::*;
-pub use cwm_types::*;
+pub mod provider;
+pub mod search;
+pub mod types;
+
+#[cfg(feature = "fetch")]
+pub mod fetch;
+
+pub use provider::*;
+pub use search::*;
+pub use types::*;
+
+#[cfg(feature = "fetch")]
+pub use fetch::*;

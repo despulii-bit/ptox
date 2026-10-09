@@ -1,5 +1,6 @@
-use cwm_fetch::{sha256_hex, CommandFetcher, FetchError, FetchRegistry};
-use cwm_types::Address;
+#![cfg(feature = "fetch")]
+
+use cwm::{sha256_hex, Address, CommandFetcher, FetchError, FetchRegistry};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};

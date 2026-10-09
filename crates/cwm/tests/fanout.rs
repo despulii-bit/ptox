@@ -1,5 +1,7 @@
-use cwm_search::{fanout, Options, ProviderError, ResultStream, SearchProvider};
-use cwm_types::{Address, ErrorCode, FileQuery, FileResult, Outcome};
+use cwm::{
+    fanout, Address, ErrorCode, FileQuery, FileResult, Options, Outcome, ProviderError,
+    ResultStream, SearchProvider,
+};
 use futures::StreamExt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;

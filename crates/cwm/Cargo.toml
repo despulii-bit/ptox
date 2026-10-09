@@ -1,6 +1,6 @@
 [package]
 name = "cwm"
-description = "cwm SDK: contracts, search engine, provider bridge, and retrieval."
+description = "The cwm SDK: contracts, search engine, provider bridge, and retrieval."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,7 +8,25 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
-cwm-fetch = { path = "../cwm-fetch" }
-cwm-provider = { path = "../cwm-provider" }
-cwm-search = { path = "../cwm-search" }
-cwm-types = { path = "../cwm-types" }
+async-stream = "0.3"
+futures = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+tokio = { version = "1", features = ["io-util", "process", "rt", "sync", "time"] }
+
+async-trait = { version = "0.1", optional = true }
+hex = { version = "0.4", optional = true }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"], optional = true }
+sha2 = { version = "0.10", optional = true }
+
+[features]
+default = ["fetch"]
+# Retrieval fabric (`Fetcher`, `FetchRegistry`, HTTP/command fetchers).
+fetch = ["dep:async-trait", "dep:hex", "dep:reqwest", "dep:sha2"]
+
+[dev-dependencies]
+async-stream = "0.3"
+futures = "0.3"
+serde_json = "1"
+tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "time"] }

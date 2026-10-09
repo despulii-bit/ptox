@@ -4,7 +4,7 @@
 //! writes result/error/done lines to stdout. This lets providers be written in
 //! any language.
 
-use cwm_types::{ErrorInfo, FileQuery, FileResult};
+use crate::types::{ErrorInfo, FileQuery, FileResult};
 use serde::Serialize;
 use serde_json::Value;
 use tokio::io::{AsyncBufRead, AsyncBufReadExt};
@@ -151,7 +151,7 @@ pub fn parse_line(line: &str) -> WireLine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cwm_types::ErrorCode;
+    use crate::types::ErrorCode;
 
     #[test]
     fn encodes_a_search_request_as_ndjson() {

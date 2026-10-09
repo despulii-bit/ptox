@@ -1,12 +1,12 @@
 //! A [`SearchProvider`] backed by an external process speaking the NDJSON wire
 //! format. This is how providers written in other languages plug in.
 
-use crate::wire::{
+use super::wire::{
     encode_request, parse_line, read_line_bounded, WireLine, WireReadError, MAX_LINE_BYTES,
 };
+use crate::search::{ProviderError, ResultStream, SearchProvider};
+use crate::types::{ErrorCode, FileQuery};
 use async_stream::stream;
-use cwm_search::{ProviderError, ResultStream, SearchProvider};
-use cwm_types::{ErrorCode, FileQuery};
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::Duration;

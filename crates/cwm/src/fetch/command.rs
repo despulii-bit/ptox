@@ -1,4 +1,4 @@
-use crate::{sha256_file, verify_sha256, FetchError, FetchRequest, Fetched, Fetcher};
+use super::{sha256_file, verify_sha256, FetchError, FetchRequest, Fetched, Fetcher};
 use async_trait::async_trait;
 
 /// Delegates a scheme to an external command (e.g. `aria2c` for `magnet`).

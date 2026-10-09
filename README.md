@@ -31,15 +31,15 @@ repo per shared component — add a crate here.
 ## Layout
 
 - `spec/` — the contract, conformance requirements, test vectors, JSON Schema.
-- `crates/cwm-types` — the data contracts (`FileQuery`, `FileResult`, `Address`, …).
-- `crates/cwm-search` — the `SearchProvider` contract and the fan-out engine.
-- `crates/cwm-provider` — the NDJSON wire format and `SubprocessProvider`.
-- `crates/cwm-fetch` — the `Fetcher` contract and retrieval implementations.
+- `crates/cwm` — **the SDK**, one crate with four modules:
+  - `cwm::types` — data contracts (`FileQuery`, `FileResult`, `Address`, …).
+  - `cwm::search` — the `SearchProvider` contract and the fan-out engine.
+  - `cwm::provider` — the NDJSON wire format and `SubprocessProvider`.
+  - `cwm::fetch` — the `Fetcher` contract and retrieval (feature `fetch`).
 - `crates/cwm-conformance` — provider conformance suite (library + CLI).
-- `crates/cwm` — the **facade**: one dependency that re-exports the above.
 
-A client depends on `cwm` and gets the whole SDK; a provider author depends on
-`cwm-types` + `cwm-search` (and tests with `cwm-conformance`).
+A client depends on `cwm` (enable the `fetch` feature for retrieval). A provider
+author uses `cwm::types` + `cwm::search` and tests with `cwm-conformance`.
 
 ## Development
 
@@ -77,10 +77,10 @@ private repo so that cloning this SDK never pulls in unrelated files.
 
 ## Status
 
-Private, pre-release. Contract **v2** locked (with a JSON Schema). The SDK is
-split into `cwm-types`, `cwm-search`, `cwm-provider`, `cwm-fetch`, and a `cwm`
-facade; the conformance suite lives in `cwm-conformance`. Providers, clients,
-ranking, and indexing are separate software. 34 tests green.
+Private, pre-release. Contract **v2** locked (with a JSON Schema). The SDK is a
+single `cwm` crate with `types` / `search` / `provider` / `fetch` modules (fetch
+behind a feature); the conformance suite is the `cwm-conformance` crate.
+Providers, clients, ranking, and indexing are separate software. 34 tests green.
 
 ## Contributing
 

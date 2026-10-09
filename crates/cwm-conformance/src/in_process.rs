@@ -1,6 +1,5 @@
 use crate::{Options, Report};
-use cwm_search::SearchProvider;
-use cwm_types::Validate;
+use cwm::{SearchProvider, Validate};
 use futures::StreamExt;
 
 /// Run the contract checks against an in-process provider.
