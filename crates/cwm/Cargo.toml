@@ -1,11 +1,14 @@
 [package]
 name = "cwm"
-description = "The cwm SDK: contracts, search engine, provider bridge, and retrieval."
+description = "A language-neutral SDK for building file-search clients across many networks."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
-publish = false
+repository = "https://github.com/despulii-bit/cwm"
+readme = "README.md"
+keywords = ["search", "file-search", "federation", "p2p", "sdk"]
+categories = ["network-programming"]
 
 [dependencies]
 async-stream = "0.3"

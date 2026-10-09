@@ -1,0 +1,35 @@
+# cwm
+
+A language-neutral **SDK for building file-search clients across many networks**
+(clearnet, I2P, Freenet/Hyphanet, IPFS, BitTorrent, …).
+
+It provides the contracts, engines, and tooling a client builds on:
+
+- **Contracts** — `FileQuery`, `FileResult`, `Address`, `SearchProvider`,
+  `Fetcher`, `Capabilities`.
+- **Engines** — `Engine` (search + retrieve), `fanout`, `merge` (deduplicate +
+  rank), `FetchRegistry`.
+- **Bridge** — the NDJSON wire format and `SubprocessProvider`, so providers can
+  be written in any language.
+
+```rust
+# async fn run(providers: Vec<std::sync::Arc<dyn cwm::SearchProvider>>) {
+let engine = cwm::Engine::new(providers);
+let report = engine.search(cwm::FileQuery::new("annual report")).await;
+for result in &report.results {
+    println!("{:?} from {:?}", result.title, result.providers);
+}
+# }
+```
+
+Retrieval (the `fetch` feature, on by default) turns a result's `Address` into
+bytes: `Engine::fetch(&result, "out.bin").await`.
+
+Providers (network plugins) and clients (frontends) are separate software. The
+contract, JSON Schema, and conformance suite live in the repository:
+<https://github.com/despulii-bit/cwm>.
+
+## License
+
+Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or
+[MIT license](LICENSE-MIT) at your option.

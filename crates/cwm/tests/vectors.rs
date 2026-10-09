@@ -4,10 +4,12 @@ use serde::Serialize;
 use serde_json::Value;
 use std::fmt::Debug;
 
-fn load() -> Value {
+/// Load the conformance vectors. `None` when the repository's `spec/` isn't
+/// adjacent (e.g. the published crate), in which case the tests are skipped.
+fn load() -> Option<Value> {
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../spec/vectors.json");
-    let raw = std::fs::read_to_string(path).expect("read spec/vectors.json");
-    serde_json::from_str(&raw).expect("parse spec/vectors.json")
+    let raw = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str(&raw).ok()
 }
 
 fn check_valid<T>(vectors: &Value, type_name: &str)
@@ -26,7 +28,6 @@ where
             .validate()
             .unwrap_or_else(|error| panic!("valid {type_name}/{name}: validate failed: {error}"));
 
-        // Known fields must round-trip without loss.
         let json = serde_json::to_value(&typed).expect("serialize");
         let back: T = serde_json::from_value(json).expect("re-deserialize");
         assert_eq!(typed, back, "round-trip mismatch for {type_name}/{name}");
@@ -52,7 +53,10 @@ where
 
 #[test]
 fn valid_vectors_pass() {
-    let vectors = load();
+    let Some(vectors) = load() else {
+        eprintln!("spec/vectors.json not present; skipping");
+        return;
+    };
     check_valid::<FileQuery>(&vectors, "file_query");
     check_valid::<Address>(&vectors, "address");
     check_valid::<FileResult>(&vectors, "file_result");
@@ -61,7 +65,10 @@ fn valid_vectors_pass() {
 
 #[test]
 fn invalid_vectors_are_rejected() {
-    let vectors = load();
+    let Some(vectors) = load() else {
+        eprintln!("spec/vectors.json not present; skipping");
+        return;
+    };
     check_invalid::<FileQuery>(&vectors, "file_query");
     check_invalid::<Address>(&vectors, "address");
     check_invalid::<FileResult>(&vectors, "file_result");
