@@ -6,6 +6,13 @@ use tokio::io::AsyncWriteExt;
 
 const SCHEMES: &[&str] = &["http", "https"];
 
+/// A descriptive default; many hosts (Wikimedia, etc.) reject requests without one.
+const DEFAULT_USER_AGENT: &str = concat!(
+    "cwm/",
+    env!("CARGO_PKG_VERSION"),
+    " (+https://github.com/despulii-bit/cwm)"
+);
+
 /// Fetches `http`/`https` URLs. Writes atomically and verifies sha256.
 pub struct HttpFetcher {
     client: reqwest::Client,
@@ -13,9 +20,16 @@ pub struct HttpFetcher {
 
 impl HttpFetcher {
     pub fn new() -> Self {
-        Self {
-            client: reqwest::Client::new(),
-        }
+        Self::with_user_agent(DEFAULT_USER_AGENT)
+    }
+
+    /// Override the `User-Agent` sent with requests.
+    pub fn with_user_agent(user_agent: &str) -> Self {
+        let client = reqwest::Client::builder()
+            .user_agent(user_agent)
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
+        Self { client }
     }
 }
 
