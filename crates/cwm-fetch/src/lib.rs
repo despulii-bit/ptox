@@ -1,13 +1,13 @@
 //! # cwm-fetch
 //!
-//! The retrieval half of cwm: turn a [`cwm_core::Address`] into bytes on disk.
+//! The retrieval half of cwm: turn a [`cwm_types::Address`] into bytes on disk.
 //!
 //! The search fabric emits `Address`es; this fabric consumes them. Fetchers are
 //! registered per scheme, so retrieval is pluggable exactly like search.
 //!
 //! ```no_run
 //! # async fn run() -> Result<(), cwm_fetch::FetchError> {
-//! use cwm_core::Address;
+//! use cwm_types::Address;
 //! let registry = cwm_fetch::FetchRegistry::with_defaults();
 //! let address = Address::new("https", "https://example.org/file.bin");
 //! let fetched = registry.fetch(&address, "file.bin", None).await?;
@@ -25,7 +25,7 @@ pub use command::CommandFetcher;
 pub use http::HttpFetcher;
 
 use async_trait::async_trait;
-use cwm_core::Address;
+use cwm_types::Address;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

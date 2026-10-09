@@ -1,5 +1,5 @@
 use cwm_conformance::{check_command, Options, Report};
-use cwm_core::FileQuery;
+use cwm_types::FileQuery;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::Duration;
@@ -9,7 +9,7 @@ async fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
 
     let mut timeout = Duration::from_secs(10);
-    let mut max_line_bytes = cwm_core::MAX_LINE_BYTES;
+    let mut max_line_bytes = cwm_provider::MAX_LINE_BYTES;
     let mut query_texts: Vec<String> = Vec::new();
     let mut json = false;
     let mut command: Vec<String> = Vec::new();

@@ -1,8 +1,8 @@
 //! Conformance item I: out-of-process providers over the NDJSON wire format.
 
-use cwm_core::{
-    fanout, ErrorCode, FileQuery, Options, Outcome, SearchProvider, SubprocessProvider,
-};
+use cwm_provider::SubprocessProvider;
+use cwm_search::{fanout, Options, SearchProvider};
+use cwm_types::{ErrorCode, FileQuery, Outcome};
 use futures::StreamExt;
 use std::path::PathBuf;
 use std::sync::Arc;

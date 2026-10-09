@@ -1,6 +1,6 @@
 # cwm-fetch
 
-The **retrieval half of cwm**: turn a [`cwm-core`](../cwm) `Address` into bytes
+The **retrieval half of cwm**: turn a [`cwm-types`](../cwm-types) `Address` into bytes
 on disk. The search fabric emits addresses; this fabric consumes them.
 
 Retrieval is pluggable per scheme, exactly like search is pluggable per provider.
@@ -40,7 +40,7 @@ fetchers are future work (or community plugins).
 
 ## Dependency note
 
-`cwm-core` is a **path** dependency to a sibling `../cwm` checkout.
+`cwm-types` is a **path** dependency inside this workspace.
 
 ## License
 

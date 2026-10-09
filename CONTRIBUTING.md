@@ -40,7 +40,14 @@ cargo test --workspace
 - `spec/core-contract.md` — the locked, language-neutral contract.
 - `spec/conformance.md` — the behavior every implementation must satisfy.
 - `spec/vectors.json` — language-neutral data-validation vectors.
-- `crates/cwm-core` — the core: types, `SearchProvider`, `fanout`, NDJSON bridge.
+- `crates/cwm-types` — the data contracts.
+- `crates/cwm-search` — `SearchProvider` + fan-out engine.
+- `crates/cwm-provider` — NDJSON wire + `SubprocessProvider`.
+- `crates/cwm-fetch` — `Fetcher` + retrieval implementations.
+- `crates/cwm-conformance` — provider conformance suite.
+- `crates/cwm` — the facade that re-exports the SDK.
+
+Providers live in **separate repos** (or, for development, the private lab).
 - Providers live in **separate repos**, e.g. `cwm-provider-btdht`.
 
 ## Writing a provider
@@ -66,7 +73,7 @@ injected at construction, never per query.
 
 Speak the NDJSON wire format (`spec/core-contract.md` §9) and wrap the program
 with `SubprocessProvider`. See
-`crates/cwm-core/examples/ndjson_provider.rs` for a minimal example.
+`crates/cwm-provider/examples/ndjson_provider.rs` for a minimal example.
 
 ### Provider checklist
 

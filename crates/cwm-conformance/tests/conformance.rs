@@ -1,5 +1,6 @@
 use cwm_conformance::{check_command, check_in_process, Options};
-use cwm_core::{Address, FileQuery, FileResult, ResultStream, SearchProvider};
+use cwm_search::{ResultStream, SearchProvider};
+use cwm_types::{Address, FileQuery, FileResult};
 use std::path::PathBuf;
 use std::time::Duration;
 

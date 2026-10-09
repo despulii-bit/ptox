@@ -1,8 +1,6 @@
 use crate::{Options, Report};
-use cwm_core::{
-    encode_request, parse_line, read_line_bounded, ErrorInfo, FileQuery, FileResult, Validate,
-    WireLine, WireReadError,
-};
+use cwm_provider::{encode_request, parse_line, read_line_bounded, WireLine, WireReadError};
+use cwm_types::{ErrorInfo, FileQuery, FileResult, Validate};
 use std::path::Path;
 use std::process::Stdio;
 use std::time::Duration;

@@ -1,4 +1,4 @@
-use crate::types::{ErrorCode, ErrorInfo, FileQuery, FileResult};
+use cwm_types::{ErrorCode, ErrorInfo, FileQuery, FileResult};
 use futures::Stream;
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;

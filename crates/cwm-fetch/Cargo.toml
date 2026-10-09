@@ -9,7 +9,7 @@ publish = false
 
 [dependencies]
 async-trait = "0.1"
-cwm-core = { path = "../cwm-core" }
+cwm-types = { path = "../cwm-types" }
 futures = "0.3"
 hex = "0.4"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }

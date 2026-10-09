@@ -20,7 +20,7 @@ pub use command::check_command;
 pub use in_process::check_in_process;
 pub use report::{Check, Report};
 
-use cwm_core::FileQuery;
+use cwm_types::FileQuery;
 use std::time::Duration;
 
 /// What to run the provider against.
@@ -39,7 +39,7 @@ impl Default for Options {
         Self {
             queries: vec![FileQuery::new("conformance test")],
             timeout: Duration::from_secs(10),
-            max_line_bytes: cwm_core::MAX_LINE_BYTES,
+            max_line_bytes: cwm_provider::MAX_LINE_BYTES,
         }
     }
 }

@@ -2,43 +2,44 @@
 
 [![CI](https://github.com/despulii-bit/cwm/actions/workflows/ci.yml/badge.svg)](https://github.com/despulii-bit/cwm/actions/workflows/ci.yml)
 
-A language-neutral core for querying **files across many networks** (clearnet, I2P,
-Freenet/Hyphanet, IPFS, BitTorrent, Tor, …) from a single query.
+**cwm is a language-neutral SDK for building file-search clients that work across
+many networks.**
 
-The core does exactly one thing: take a `FileQuery`, fan it out to injected
-`SearchProvider`s, and stream back attributed results. It has **no UI, no CLI, no
-storage, no ranking, and no network I/O**.
+It has three parts:
+
+- **Contracts** — the data model and interfaces: `FileQuery`, `FileResult`,
+  `Address`, `SearchProvider`, `Fetcher`.
+- **Engines** — the search fan-out engine and the retrieval engine.
+- **Tooling** — the conformance suite and the wire schema.
+
+It does **not** include networks or user interfaces. Those are built on top:
+
+- **Providers** adapt one network (e.g. clearnet, I2P, Freenet, IPFS, BitTorrent).
+- **Clients** are frontends (CLI, GUI, agent) that assemble the SDK.
 
 ```
-FileQuery ──▶ fanout(query, providers) ──▶ Stream[FileResult | Failure]
+FileQuery ─▶ fanout(query, providers) ─▶ Stream[FileResult | Failure]
+FileResult ─▶ fetch(address) ─▶ bytes on disk
 ```
 
-This repo is the **shared SDK**: the contracts, the search engine, the retrieval
-fabric, and the conformance kit. Everything else is separate software built on
-those contracts:
+## Repo model
 
-| Layer | Examples |
-|---|---|
-| Providers (one per network) | clearnet, I2P, Freenet, IPFS, BitTorrent |
-| Post-processing | merge, dedup, ranking |
-| Frontends (clients) | CLI, TUI, GUI, web, agents |
-| Index | a local store exposed as just another provider |
-
-Only **clients** (distributions) and **providers** (plugins) are separate repos;
-all shared libraries live here.
+Only **clients** (distributions) and **providers** (plugins) are separate repos.
+**All shared libraries live in this repo**, as a Cargo workspace. Don't create a
+repo per shared component — add a crate here.
 
 ## Layout
 
-- `spec/core-contract.md` — the locked, language-neutral contract.
-- `spec/conformance.md` — what any implementation must satisfy.
-- `spec/vectors.json` — language-neutral test vectors.
-- `spec/schema/wire.schema.json` — JSON Schema for the wire protocol.
-- `crates/cwm-core` — the contracts, search engine, and NDJSON bridge.
-- `crates/cwm-fetch` — retrieval fabric (`Fetcher` contract + HTTP/command fetchers).
+- `spec/` — the contract, conformance requirements, test vectors, JSON Schema.
+- `crates/cwm-types` — the data contracts (`FileQuery`, `FileResult`, `Address`, …).
+- `crates/cwm-search` — the `SearchProvider` contract and the fan-out engine.
+- `crates/cwm-provider` — the NDJSON wire format and `SubprocessProvider`.
+- `crates/cwm-fetch` — the `Fetcher` contract and retrieval implementations.
 - `crates/cwm-conformance` — provider conformance suite (library + CLI).
+- `crates/cwm` — the **facade**: one dependency that re-exports the above.
 
-Providers and clients are separate repos; this repo holds only the shared
-libraries.
+A client depends on `cwm` and gets the whole SDK; a provider author depends on
+`cwm-types` + `cwm-search` (and tests with `cwm-conformance`).
 
 ## Development
 
@@ -55,9 +56,9 @@ A provider is one network or index. Two ways to plug one in:
 
 - **Rust:** implement the `SearchProvider` trait and pass it to `fanout`.
 - **Any language:** speak the NDJSON wire format (contract §9) and wrap the
-  program with `SubprocessProvider` — the child is killed on cancellation.
-  Configuration (proxies, routers, data dirs) is passed via `.arg()` / `.env()`.
-  Output is read with a bound, so a hostile provider cannot exhaust memory.
+  program with `SubprocessProvider`. Configuration (proxies, routers, data dirs)
+  is passed via `.arg()` / `.env()`. Output is read with a bound, so a hostile
+  provider cannot exhaust memory.
 
 Test any provider against the contract with the conformance suite:
 
@@ -65,26 +66,25 @@ Test any provider against the contract with the conformance suite:
 cargo run -p cwm-conformance -- -- <provider-command> [args...]
 ```
 
-See `crates/cwm-core/examples/ndjson_provider.rs` for a minimal wire provider.
-See `crates/cwm-conformance/examples/fixture_provider.rs` for one that
+See `crates/cwm-provider/examples/ndjson_provider.rs` for a minimal wire provider
+and `crates/cwm-conformance/examples/fixture_provider.rs` for one that
 demonstrates the failure modes the suite detects.
 
 ## Development files
 
 Agent/development scaffolding does **not** live here. It is tracked in a separate
-repo so that cloning this program never pulls in unrelated files.
+private repo so that cloning this SDK never pulls in unrelated files.
 
 ## Status
 
-Contract v2 locked (with a JSON Schema); Rust core (fan-out, streaming,
-isolation, timeout, cancellation, bounded NDJSON subprocess bridge); retrieval
-fabric (`cwm-fetch`); conformance suite (`cwm-conformance`); 34 tests green.
-Providers, clients, ranking, and indexing are separate software.
+Private, pre-release. Contract **v2** locked (with a JSON Schema). The SDK is
+split into `cwm-types`, `cwm-search`, `cwm-provider`, `cwm-fetch`, and a `cwm`
+facade; the conformance suite lives in `cwm-conformance`. Providers, clients,
+ranking, and indexing are separate software. 34 tests green.
 
 ## Contributing
 
-Contributions are welcome — especially providers. See [CONTRIBUTING.md](CONTRIBUTING.md)
-for the provider on-ramp, scope rules, and CI requirements.
+Contributions are welcome — especially providers. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
