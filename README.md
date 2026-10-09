@@ -1,5 +1,7 @@
 # cwm
 
+[![CI](https://github.com/despulii-bit/cwm/actions/workflows/ci.yml/badge.svg)](https://github.com/despulii-bit/cwm/actions/workflows/ci.yml)
+
 A language-neutral core for querying **files across many networks** (clearnet, I2P,
 Freenet/Hyphanet, IPFS, BitTorrent, Tor, …) from a single query.
 
@@ -63,3 +65,12 @@ Contract v0 locked; Rust core implemented (fan-out, streaming, isolation,
 timeout, cancellation, NDJSON subprocess bridge); BitTorrent DHT provider
 (infohash → peers); 27 tests green. Keyword search over BitTorrent and all
 frontends are separate software.
+
+## License
+
+Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or
+[MIT license](LICENSE-MIT) at your option.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in this project by you, as defined in the Apache-2.0 license,
+shall be dual licensed as above, without any additional terms or conditions.
