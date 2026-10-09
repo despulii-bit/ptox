@@ -66,6 +66,11 @@ timeout, cancellation, NDJSON subprocess bridge); BitTorrent DHT provider
 (infohash → peers); 27 tests green. Keyword search over BitTorrent and all
 frontends are separate software.
 
+## Contributing
+
+Contributions are welcome — especially providers. See [CONTRIBUTING.md](CONTRIBUTING.md)
+for the provider on-ramp, scope rules, and CI requirements.
+
 ## License
 
 Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or
