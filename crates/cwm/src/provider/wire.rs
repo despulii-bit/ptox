@@ -110,6 +110,17 @@ pub fn encode_request(id: u64, query: &FileQuery) -> Result<String, serde_json::
     Ok(serde_json::to_string(&request)? + "\n")
 }
 
+/// Encode a `capabilities` request as a single NDJSON line.
+pub fn encode_capabilities_request(id: u64) -> Result<String, serde_json::Error> {
+    let request = serde_json::json!({
+        "v": PROTOCOL_VERSION,
+        "id": id,
+        "method": "capabilities",
+        "params": {}
+    });
+    Ok(serde_json::to_string(&request)? + "\n")
+}
+
 /// Decode one NDJSON line from a provider. Unknown fields are tolerated.
 pub fn parse_line(line: &str) -> WireLine {
     let value: Value = match serde_json::from_str(line) {

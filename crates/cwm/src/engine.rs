@@ -29,6 +29,8 @@ use std::path::PathBuf;
 pub struct SearchReport {
     pub results: Vec<MergedResult>,
     pub failures: Vec<Failure>,
+    /// Providers skipped because their declared capabilities reject the query.
+    pub skipped: Vec<String>,
 }
 
 /// Runs providers and (optionally) retrieves results.
@@ -80,9 +82,21 @@ impl Engine {
         &self.providers
     }
 
-    /// Run the query across every provider and return ranked, deduplicated results.
+    /// Run the query across every capable provider; return ranked, deduplicated
+    /// results. Providers whose declared capabilities reject the query are
+    /// skipped (listed in [`SearchReport::skipped`]) without being spawned.
     pub async fn search(&self, query: FileQuery) -> SearchReport {
-        let outcomes = collect(fanout(query, self.providers.clone(), self.options.clone())).await;
+        let mut providers = Vec::new();
+        let mut skipped = Vec::new();
+        for provider in &self.providers {
+            if provider.capabilities().await.accepts(&query) {
+                providers.push(provider.clone());
+            } else {
+                skipped.push(provider.name().to_owned());
+            }
+        }
+
+        let outcomes = collect(fanout(query, providers, self.options.clone())).await;
         let results: Vec<crate::types::FileResult> = outcomes
             .iter()
             .filter_map(|outcome| outcome.as_result().cloned())
@@ -97,7 +111,11 @@ impl Engine {
                 provider_weights: self.provider_weights.clone(),
             },
         );
-        SearchReport { results, failures }
+        SearchReport {
+            results,
+            failures,
+            skipped,
+        }
     }
 
     /// Fetch the preferred address of a result.

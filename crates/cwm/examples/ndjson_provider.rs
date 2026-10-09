@@ -40,6 +40,13 @@ fn main() {
         "crash" => {
             std::process::exit(3);
         }
+        "capabilities" => {
+            let _ = writeln!(
+                out,
+                r#"{{"id":1,"result":{{"query":["text"],"schemes":["https"]}}}}"#
+            );
+            let _ = writeln!(out, r#"{{"id":1,"done":true}}"#);
+        }
         _ => {
             let text = serde_json::from_str::<serde_json::Value>(&line)
                 .ok()

@@ -98,8 +98,9 @@ Well-known `code` values (open set; unknown codes MUST be tolerated):
 ## 6. `SearchProvider`
 
 ```
-name            : string
-search(query)   : Stream[FileResult]
+name             : string
+capabilities()   : Capabilities   # optional; default = universal
+search(query)    : Stream[FileResult]
 ```
 
 - One provider per network (or per index). Community-supplied.
@@ -108,6 +109,18 @@ search(query)   : Stream[FileResult]
   `Failure`.
 - Transport (VPN/Tor/I2P/proxy) is injected at provider **construction**, not
   per-query.
+
+### `Capabilities`
+
+```
+query    : [string]   # supported query facets (empty = any)
+requires : [string]   # facets that MUST be present
+schemes  : [string]   # emitted address schemes (empty = any)
+```
+
+Facets: `text`, `hashes`, `mimetypes`, `extensions`, `filename`, `size`,
+`published`, `lang`. The default (empty) is **universal**. The engine skips a
+provider whose capabilities reject the query instead of spawning it.
 
 ---
 
@@ -175,6 +188,17 @@ Cancellation (host → provider):
 ```
 {"id": 1, "cancel": true}
 ```
+
+Capabilities request (optional; providers may ignore it):
+```
+{"v": 2, "id": 1, "method": "capabilities", "params": {}}
+```
+
+Capabilities response:
+```
+{"id": 1, "result": {"query": ["hashes"], "requires": ["hashes"], "schemes": ["magnet"]}}
+```
+A provider that does not answer is treated as universal.
 
 ---
 

@@ -2,16 +2,21 @@
 //! format. This is how providers written in other languages plug in.
 
 use super::wire::{
-    encode_request, parse_line, read_line_bounded, WireLine, WireReadError, MAX_LINE_BYTES,
+    encode_capabilities_request, encode_request, parse_line, read_line_bounded, WireLine,
+    WireReadError, MAX_LINE_BYTES,
 };
-use crate::search::{ProviderError, ResultStream, SearchProvider};
+use crate::search::{Capabilities, ProviderError, ResultStream, SearchProvider};
 use crate::types::{ErrorCode, FileQuery};
 use async_stream::stream;
+use async_trait::async_trait;
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncWriteExt, BufReader};
 use tokio::process::Command;
+use tokio::sync::OnceCell;
+use tokio::time::{timeout, Instant};
 
 /// Runs a child process once per query. The child is killed when the stream is
 /// dropped, so cancellation propagates across the process boundary.
@@ -24,6 +29,7 @@ pub struct SubprocessProvider {
     program: PathBuf,
     args: Vec<String>,
     env: Vec<(String, String)>,
+    capabilities: Arc<OnceCell<Capabilities>>,
 }
 
 impl SubprocessProvider {
@@ -33,6 +39,7 @@ impl SubprocessProvider {
             program: program.into(),
             args: Vec::new(),
             env: Vec::new(),
+            capabilities: Arc::new(OnceCell::new()),
         }
     }
 
@@ -67,11 +74,77 @@ impl SubprocessProvider {
         );
         self
     }
+
+    /// Ask the provider for its capabilities once; `None` if it doesn't answer.
+    async fn probe_capabilities(&self) -> Option<Capabilities> {
+        let mut command = Command::new(&self.program);
+        command
+            .args(&self.args)
+            .envs(
+                self.env
+                    .iter()
+                    .map(|(key, value)| (key.clone(), value.clone())),
+            )
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .kill_on_drop(true);
+        let mut child = command.spawn().ok()?;
+
+        let request = encode_capabilities_request(1).ok()?;
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin.write_all(request.as_bytes()).await.ok()?;
+        }
+        let stdout = child.stdout.take()?;
+        let mut reader = BufReader::new(stdout);
+        let deadline = Instant::now() + Duration::from_secs(2);
+
+        loop {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return None;
+            }
+            match timeout(remaining, read_line_bounded(&mut reader, MAX_LINE_BYTES)).await {
+                Ok(Ok(Some(line))) => {
+                    if line.trim().is_empty() {
+                        continue;
+                    }
+                    let value: serde_json::Value = match serde_json::from_str(&line) {
+                        Ok(value) => value,
+                        Err(_) => return None,
+                    };
+                    if value.get("done").and_then(serde_json::Value::as_bool) == Some(true) {
+                        return None;
+                    }
+                    if value.get("error").is_some() {
+                        return None;
+                    }
+                    if let Some(result) = value.get("result") {
+                        return serde_json::from_value::<Capabilities>(result.clone()).ok();
+                    }
+                }
+                _ => return None,
+            }
+        }
+    }
 }
 
+#[async_trait]
 impl SearchProvider for SubprocessProvider {
     fn name(&self) -> &str {
         &self.name
+    }
+
+    /// Ask the provider once, then cache; unknown is treated as universal.
+    async fn capabilities(&self) -> Capabilities {
+        self.capabilities
+            .get_or_init(|| async {
+                self.probe_capabilities()
+                    .await
+                    .unwrap_or_else(Capabilities::universal)
+            })
+            .await
+            .clone()
     }
 
     fn search(&self, query: &FileQuery) -> ResultStream<'_> {

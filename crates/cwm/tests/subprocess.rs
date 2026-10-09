@@ -1,6 +1,9 @@
 //! Conformance item I: out-of-process providers over the NDJSON wire format.
 
-use cwm::{fanout, ErrorCode, FileQuery, Options, Outcome, SearchProvider, SubprocessProvider};
+use cwm::{
+    fanout, Capabilities, ErrorCode, FileQuery, Options, Outcome, SearchProvider,
+    SubprocessProvider,
+};
 use futures::StreamExt;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -83,6 +86,23 @@ async fn passes_environment_to_the_provider() {
         titles.iter().any(|title| title.contains("TAG-")),
         "expected an env-tagged title, got {titles:?}"
     );
+}
+
+#[tokio::test]
+async fn subprocess_provider_reports_capabilities() {
+    let bin = example_binary();
+    let provider = SubprocessProvider::new("example", bin).arg("capabilities");
+    let capabilities = provider.capabilities().await;
+    assert_eq!(capabilities.query, vec!["text"]);
+    assert_eq!(capabilities.schemes, vec!["https"]);
+    assert!(capabilities.accepts(&FileQuery::new("keyword")));
+}
+
+#[tokio::test]
+async fn provider_without_capabilities_is_universal() {
+    let provider = SubprocessProvider::new("example", example_binary());
+    let capabilities = provider.capabilities().await;
+    assert_eq!(capabilities, Capabilities::universal());
 }
 
 #[tokio::test]

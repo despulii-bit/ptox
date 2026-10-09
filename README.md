@@ -8,9 +8,9 @@ many networks.**
 It has three parts:
 
 - **Contracts** — the data model and interfaces: `FileQuery`, `FileResult`,
-  `Address`, `SearchProvider`, `Fetcher`.
-- **Engines** — the search fan-out engine, the retrieval engine, and the
-  merge/rank post-processor.
+  `Address`, `SearchProvider`, `Fetcher`, `Capabilities`.
+- **Engines** — the high-level [`Engine`](crates/cwm/src/engine.rs), the search
+  fan-out engine, the retrieval engine, and the merge/rank post-processor.
 - **Tooling** — the conformance suite and the wire schema.
 
 It does **not** include networks or user interfaces. Those are built on top:
@@ -32,9 +32,10 @@ repo per shared component — add a crate here.
 ## Layout
 
 - `spec/` — the contract, conformance requirements, test vectors, JSON Schema.
-- `crates/cwm` — **the SDK**, one crate with five modules:
+- `crates/cwm` — **the SDK**, one crate with six modules:
+  - `cwm::engine` — the high-level `Engine` (search + fetch), the client entry point.
   - `cwm::types` — data contracts (`FileQuery`, `FileResult`, `Address`, …).
-  - `cwm::search` — the `SearchProvider` contract and the fan-out engine.
+  - `cwm::search` — the `SearchProvider` contract, `Capabilities`, and the fan-out engine.
   - `cwm::provider` — the NDJSON wire format and `SubprocessProvider`.
   - `cwm::fetch` — the `Fetcher` contract and retrieval (feature `fetch`).
   - `cwm::merge` — deduplicate + rank results from many providers.

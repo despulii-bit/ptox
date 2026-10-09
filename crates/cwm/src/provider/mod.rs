@@ -6,6 +6,6 @@ mod wire;
 
 pub use subprocess::SubprocessProvider;
 pub use wire::{
-    encode_request, parse_line, read_line_bounded, WireLine, WireReadError, MAX_LINE_BYTES,
-    PROTOCOL_VERSION,
+    encode_capabilities_request, encode_request, parse_line, read_line_bounded, WireLine,
+    WireReadError, MAX_LINE_BYTES, PROTOCOL_VERSION,
 };
