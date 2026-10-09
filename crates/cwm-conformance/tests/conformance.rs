@@ -76,6 +76,16 @@ async fn oversized_line_fails_the_wire_check() {
         .any(|check| check.name == "valid_wire_lines" && !check.passed));
 }
 
+#[tokio::test]
+async fn crash_fails_the_clean_exit_check() {
+    let report = check_command(&fixture_bin(), &mode("crash"), &Options::default()).await;
+    assert!(!report.passed());
+    assert!(report
+        .checks
+        .iter()
+        .any(|check| check.name == "exits_cleanly" && !check.passed));
+}
+
 struct MockProvider {
     name: String,
 }

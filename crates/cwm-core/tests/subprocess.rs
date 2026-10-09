@@ -88,6 +88,23 @@ async fn passes_environment_to_the_provider() {
 }
 
 #[tokio::test]
+async fn abnormal_exit_becomes_a_failure() {
+    let bin = example_binary();
+    let outcomes = collect(fanout(
+        FileQuery::new("x"),
+        providers(vec![SubprocessProvider::new("example", bin).arg("crash")]),
+        Options::default(),
+    ))
+    .await;
+
+    assert_eq!(outcomes.len(), 1);
+    match &outcomes[0] {
+        Outcome::Failure(failure) => assert_eq!(failure.error.code, ErrorCode::transport()),
+        other => panic!("expected a transport failure, got {other:?}"),
+    }
+}
+
+#[tokio::test]
 async fn provider_error_becomes_a_failure() {
     let outcomes = collect(fanout(
         FileQuery::new("x"),

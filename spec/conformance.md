@@ -68,6 +68,8 @@ Using `vectors.json`:
    (`core-contract.md` §9) MUST be usable exactly like an in-process provider.
 2. Malformed wire input MUST yield `Failure{code:"malformed"}` for that provider
    only.
+3. A provider that exits non-zero **without** emitting `done` MUST be reported as
+   `Failure{code:"transport"}`, never as an empty (successful) result set.
 
 ## J. Ordering
 

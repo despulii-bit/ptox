@@ -9,6 +9,7 @@ use crate::wire::{
 use async_stream::stream;
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::time::Duration;
 use tokio::io::{AsyncWriteExt, BufReader};
 use tokio::process::Command;
 
@@ -158,7 +159,21 @@ impl SearchProvider for SubprocessProvider {
                             }
                         }
                     }
-                    Ok(None) => return,
+                    Ok(None) => {
+                        // EOF without `done`. If the process exited non-zero it
+                        // crashed — report a failure, not an empty result set.
+                        if let Ok(Ok(status)) =
+                            tokio::time::timeout(Duration::from_secs(1), child.wait()).await
+                        {
+                            if !status.success() {
+                                yield Err(ProviderError::new(
+                                    ErrorCode::transport(),
+                                    format!("provider exited with {status}"),
+                                ));
+                            }
+                        }
+                        return;
+                    }
                     Err(WireReadError::TooLong { limit }) => {
                         yield Err(ProviderError::new(
                             ErrorCode::malformed(),

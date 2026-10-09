@@ -37,6 +37,9 @@ fn main() {
                 i += 1;
             }
         }
+        "crash" => {
+            std::process::exit(3);
+        }
         _ => {
             let text = serde_json::from_str::<serde_json::Value>(&line)
                 .ok()

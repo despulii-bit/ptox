@@ -21,6 +21,7 @@ pub async fn check_command(program: &Path, args: &[String], options: &Options) -
     let mut invalid = Vec::new();
     let mut results = Vec::new();
     let mut errors = Vec::new();
+    let mut abnormal = Vec::new();
     let mut not_terminated = 0usize;
 
     for query in &options.queries {
@@ -43,6 +44,9 @@ pub async fn check_command(program: &Path, args: &[String], options: &Options) -
                     results.push(result);
                 }
                 errors.extend(run.errors);
+                if let Some(reason) = run.abnormal_exit {
+                    abnormal.push(format!("{name}: {reason}"));
+                }
                 if !run.terminated {
                     not_terminated += 1;
                 }
@@ -100,6 +104,16 @@ pub async fn check_command(program: &Path, args: &[String], options: &Options) -
         format!("{not_terminated} invocation(s) did not finish"),
     );
 
+    report.push(
+        "exits_cleanly",
+        abnormal.is_empty(),
+        if abnormal.is_empty() {
+            "no abnormal exits".to_owned()
+        } else {
+            abnormal.join("; ")
+        },
+    );
+
     report
 }
 
@@ -109,6 +123,7 @@ struct Run {
     errors: Vec<ErrorInfo>,
     invalid: Vec<String>,
     terminated: bool,
+    abnormal_exit: Option<String>,
 }
 
 async fn run_once(
@@ -143,6 +158,7 @@ async fn run_once(
         .ok_or_else(|| "provider has no stdout".to_owned())?;
     let mut reader = BufReader::new(stdout);
     let mut run = Run::default();
+    let mut saw_eof = false;
     let deadline = Instant::now() + timeout;
 
     loop {
@@ -169,6 +185,7 @@ async fn run_once(
             }
             Ok(Ok(None)) => {
                 run.terminated = true;
+                saw_eof = true;
                 break;
             }
             Ok(Err(WireReadError::TooLong { limit })) => {
@@ -178,6 +195,14 @@ async fn run_once(
             Ok(Err(WireReadError::Io(error))) => {
                 run.invalid.push(format!("read error: {error}"));
                 break;
+            }
+        }
+    }
+
+    if saw_eof {
+        if let Ok(Ok(status)) = tokio::time::timeout(Duration::from_secs(1), child.wait()).await {
+            if !status.success() {
+                run.abnormal_exit = Some(format!("exited with {status}"));
             }
         }
     }

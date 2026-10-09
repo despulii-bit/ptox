@@ -32,6 +32,10 @@ fn main() {
         "hang" => {
             std::thread::sleep(std::time::Duration::from_secs(3600));
         }
+        "crash" => {
+            // Exit non-zero with no output.
+            std::process::exit(3);
+        }
         "oversized" => {
             // A line far larger than the host's limit.
             let big = "a".repeat(4096);
