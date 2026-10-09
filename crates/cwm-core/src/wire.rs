@@ -7,6 +7,70 @@
 use crate::types::{ErrorInfo, FileQuery, FileResult};
 use serde::Serialize;
 use serde_json::Value;
+use tokio::io::{AsyncBufRead, AsyncBufReadExt};
+
+/// Default maximum wire-line length. A longer line is treated as `malformed`,
+/// so a hostile provider cannot exhaust the host's memory.
+pub const MAX_LINE_BYTES: usize = 8 * 1024 * 1024;
+
+/// Errors from reading a bounded NDJSON line.
+#[derive(Debug, thiserror::Error)]
+pub enum WireReadError {
+    #[error("io error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("wire line exceeded {limit} bytes")]
+    TooLong { limit: usize },
+}
+
+/// Read one newline-terminated line, erroring if it exceeds `max` bytes.
+///
+/// Unlike `AsyncBufReadExt::lines`, this never grows an unbounded buffer.
+pub async fn read_line_bounded<R>(
+    reader: &mut R,
+    max: usize,
+) -> Result<Option<String>, WireReadError>
+where
+    R: AsyncBufRead + Unpin,
+{
+    let mut buf: Vec<u8> = Vec::new();
+    loop {
+        let (finished, consumed) = {
+            let available = reader.fill_buf().await?;
+            if available.is_empty() {
+                if buf.is_empty() {
+                    return Ok(None);
+                }
+                (true, 0)
+            } else if let Some(position) = available.iter().position(|byte| *byte == b'\n') {
+                buf.extend_from_slice(&available[..position]);
+                (true, position + 1)
+            } else {
+                buf.extend_from_slice(available);
+                (false, available.len())
+            }
+        };
+
+        if consumed > 0 {
+            reader.consume(consumed);
+        }
+        if buf.len() > max {
+            return Err(WireReadError::TooLong { limit: max });
+        }
+        if finished {
+            break;
+        }
+    }
+
+    if buf.last() == Some(&b'\r') {
+        buf.pop();
+    }
+    String::from_utf8(buf).map(Some).map_err(|_| {
+        WireReadError::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "invalid utf-8",
+        ))
+    })
+}
 
 /// One decoded line from a provider's stdout.
 #[derive(Debug, Clone, PartialEq)]
@@ -114,6 +178,32 @@ mod tests {
         assert!(matches!(
             parse_line(r#"{"id":1}"#),
             WireLine::Invalid { .. }
+        ));
+    }
+
+    #[tokio::test]
+    async fn read_line_bounded_reads_until_newline_and_eof() {
+        let mut reader = tokio::io::BufReader::new(&b"first\nsecond\n"[..]);
+        assert_eq!(
+            read_line_bounded(&mut reader, 64).await.expect("read"),
+            Some("first".to_owned())
+        );
+        assert_eq!(
+            read_line_bounded(&mut reader, 64).await.expect("read"),
+            Some("second".to_owned())
+        );
+        assert_eq!(
+            read_line_bounded(&mut reader, 64).await.expect("read"),
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn read_line_bounded_rejects_over_limit() {
+        let mut reader = tokio::io::BufReader::new(&b"aaaaaaaaaa\n"[..]);
+        assert!(matches!(
+            read_line_bounded(&mut reader, 4).await,
+            Err(WireReadError::TooLong { limit: 4 })
         ));
     }
 }

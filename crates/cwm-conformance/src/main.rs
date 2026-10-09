@@ -9,6 +9,7 @@ async fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
 
     let mut timeout = Duration::from_secs(10);
+    let mut max_line_bytes = cwm_core::MAX_LINE_BYTES;
     let mut query_texts: Vec<String> = Vec::new();
     let mut json = false;
     let mut command: Vec<String> = Vec::new();
@@ -41,6 +42,19 @@ async fn main() -> ExitCode {
                 }
             }
             "--json" => json = true,
+            "--max-line-bytes" => {
+                index += 1;
+                match args
+                    .get(index)
+                    .and_then(|value| value.parse::<usize>().ok())
+                {
+                    Some(bytes) => max_line_bytes = bytes,
+                    None => {
+                        eprintln!("error: --max-line-bytes requires a byte count");
+                        return ExitCode::from(2);
+                    }
+                }
+            }
             "-h" | "--help" => {
                 print!("{}", usage());
                 return ExitCode::SUCCESS;
@@ -70,6 +84,7 @@ async fn main() -> ExitCode {
             query_texts.into_iter().map(FileQuery::new).collect()
         },
         timeout,
+        max_line_bytes,
     };
 
     let report = check_command(&program, &program_args, &options).await;
@@ -107,9 +122,10 @@ USAGE:
     cwm-conformance [OPTIONS] -- <command> [args...]
 
 OPTIONS:
-    --timeout <SECS>   per-query time budget (default 10)
-    --query <TEXT>     query to send (repeatable)
-    --json             emit the report as JSON
-    -h, --help         show this help
+    --timeout <SECS>        per-query time budget (default 10)
+    --query <TEXT>          query to send (repeatable)
+    --max-line-bytes <N>    reject provider lines larger than N bytes
+    --json                  emit the report as JSON
+    -h, --help              show this help
 "
 }

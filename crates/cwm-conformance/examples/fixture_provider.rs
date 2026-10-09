@@ -32,6 +32,11 @@ fn main() {
         "hang" => {
             std::thread::sleep(std::time::Duration::from_secs(3600));
         }
+        "oversized" => {
+            // A line far larger than the host's limit.
+            let big = "a".repeat(4096);
+            let _ = writeln!(out, "{big}");
+        }
         _ => {
             // Note: no `provider` field; the host is responsible for attribution.
             let _ = writeln!(

@@ -23,4 +23,6 @@ pub use types::{
     Address, ErrorCode, ErrorInfo, Extras, Failure, FileQuery, FileResult, HashAlgos, Outcome,
     Validate, ValidationError,
 };
-pub use wire::{encode_request, parse_line, WireLine};
+pub use wire::{
+    encode_request, parse_line, read_line_bounded, WireLine, WireReadError, MAX_LINE_BYTES,
+};

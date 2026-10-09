@@ -51,6 +51,8 @@ Using `vectors.json`:
    total; a provider emitting unbounded results must not exhaust memory.
 2. A provider returning a very large `raw` payload MUST be bounded/truncated or
    rejected, never allowed to OOM the host.
+3. An output line larger than the host's limit MUST be rejected as `malformed`,
+   never buffered without bound.
 
 ## H. Security invariants
 

@@ -30,6 +30,8 @@ pub struct Options {
     pub queries: Vec<FileQuery>,
     /// Time budget per query; exceeding it fails the termination check.
     pub timeout: Duration,
+    /// Maximum accepted wire-line length (hostile-output bound).
+    pub max_line_bytes: usize,
 }
 
 impl Default for Options {
@@ -37,6 +39,7 @@ impl Default for Options {
         Self {
             queries: vec![FileQuery::new("conformance test")],
             timeout: Duration::from_secs(10),
+            max_line_bytes: cwm_core::MAX_LINE_BYTES,
         }
     }
 }

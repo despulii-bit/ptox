@@ -3,20 +3,26 @@
 
 use crate::provider::{ProviderError, ResultStream, SearchProvider};
 use crate::types::{ErrorCode, FileQuery};
-use crate::wire::{encode_request, parse_line, WireLine};
+use crate::wire::{
+    encode_request, parse_line, read_line_bounded, WireLine, WireReadError, MAX_LINE_BYTES,
+};
 use async_stream::stream;
 use std::path::PathBuf;
 use std::process::Stdio;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncWriteExt, BufReader};
 use tokio::process::Command;
 
 /// Runs a child process once per query. The child is killed when the stream is
 /// dropped, so cancellation propagates across the process boundary.
+///
+/// Configuration (proxies, routers, data dirs, credentials) is passed to the
+/// provider at spawn time via arguments and environment variables.
 #[derive(Debug, Clone)]
 pub struct SubprocessProvider {
     name: String,
     program: PathBuf,
     args: Vec<String>,
+    env: Vec<(String, String)>,
 }
 
 impl SubprocessProvider {
@@ -25,6 +31,7 @@ impl SubprocessProvider {
             name: name.into(),
             program: program.into(),
             args: Vec::new(),
+            env: Vec::new(),
         }
     }
 
@@ -41,6 +48,24 @@ impl SubprocessProvider {
         self.args.extend(args.into_iter().map(Into::into));
         self
     }
+
+    pub fn env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.env.push((key.into(), value.into()));
+        self
+    }
+
+    pub fn envs<I, K, V>(mut self, vars: I) -> Self
+    where
+        I: IntoIterator<Item = (K, V)>,
+        K: Into<String>,
+        V: Into<String>,
+    {
+        self.env.extend(
+            vars.into_iter()
+                .map(|(key, value)| (key.into(), value.into())),
+        );
+        self
+    }
 }
 
 impl SearchProvider for SubprocessProvider {
@@ -52,12 +77,14 @@ impl SearchProvider for SubprocessProvider {
         let name = self.name.clone();
         let program = self.program.clone();
         let args = self.args.clone();
+        let env = self.env.clone();
         let query = query.clone();
 
         Box::pin(stream! {
             let mut command = Command::new(&program);
             command
                 .args(&args)
+                .envs(env.iter().map(|(key, value)| (key.clone(), value.clone())))
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
                 .stderr(Stdio::null())
@@ -104,9 +131,9 @@ impl SearchProvider for SubprocessProvider {
                 return;
             };
 
-            let mut lines = BufReader::new(stdout).lines();
+            let mut reader = BufReader::new(stdout);
             loop {
-                match lines.next_line().await {
+                match read_line_bounded(&mut reader, MAX_LINE_BYTES).await {
                     Ok(Some(line)) => {
                         if line.trim().is_empty() {
                             continue;
@@ -132,7 +159,14 @@ impl SearchProvider for SubprocessProvider {
                         }
                     }
                     Ok(None) => return,
-                    Err(error) => {
+                    Err(WireReadError::TooLong { limit }) => {
+                        yield Err(ProviderError::new(
+                            ErrorCode::malformed(),
+                            format!("provider output line exceeded {limit} bytes"),
+                        ));
+                        return;
+                    }
+                    Err(WireReadError::Io(error)) => {
                         yield Err(ProviderError::new(
                             ErrorCode::transport(),
                             format!("failed to read provider output: {error}"),

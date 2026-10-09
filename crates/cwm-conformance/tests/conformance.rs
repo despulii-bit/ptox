@@ -62,6 +62,20 @@ async fn hang_fails_the_termination_check() {
         .any(|check| check.name == "terminates" && !check.passed));
 }
 
+#[tokio::test]
+async fn oversized_line_fails_the_wire_check() {
+    let options = Options {
+        max_line_bytes: 1024,
+        ..Options::default()
+    };
+    let report = check_command(&fixture_bin(), &mode("oversized"), &options).await;
+    assert!(!report.passed());
+    assert!(report
+        .checks
+        .iter()
+        .any(|check| check.name == "valid_wire_lines" && !check.passed));
+}
+
 struct MockProvider {
     name: String,
 }

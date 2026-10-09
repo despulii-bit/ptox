@@ -1,9 +1,12 @@
 use crate::{Options, Report};
-use cwm_core::{encode_request, parse_line, ErrorInfo, FileQuery, FileResult, Validate, WireLine};
+use cwm_core::{
+    encode_request, parse_line, read_line_bounded, ErrorInfo, FileQuery, FileResult, Validate,
+    WireLine, WireReadError,
+};
 use std::path::Path;
 use std::process::Stdio;
 use std::time::Duration;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use tokio::time::Instant;
 
@@ -21,7 +24,15 @@ pub async fn check_command(program: &Path, args: &[String], options: &Options) -
     let mut not_terminated = 0usize;
 
     for query in &options.queries {
-        match run_once(program, args, query, options.timeout).await {
+        match run_once(
+            program,
+            args,
+            query,
+            options.timeout,
+            options.max_line_bytes,
+        )
+        .await
+        {
             Ok(run) => {
                 invalid.extend(run.invalid);
                 for mut result in run.results {
@@ -105,6 +116,7 @@ async fn run_once(
     args: &[String],
     query: &FileQuery,
     timeout: Duration,
+    max_line_bytes: usize,
 ) -> Result<Run, String> {
     let mut command = Command::new(program);
     command
@@ -129,7 +141,7 @@ async fn run_once(
         .stdout
         .take()
         .ok_or_else(|| "provider has no stdout".to_owned())?;
-    let mut lines = BufReader::new(stdout).lines();
+    let mut reader = BufReader::new(stdout);
     let mut run = Run::default();
     let deadline = Instant::now() + timeout;
 
@@ -138,7 +150,8 @@ async fn run_once(
         if remaining.is_zero() {
             break;
         }
-        match tokio::time::timeout(remaining, lines.next_line()).await {
+        match tokio::time::timeout(remaining, read_line_bounded(&mut reader, max_line_bytes)).await
+        {
             Err(_) => break,
             Ok(Ok(Some(line))) => {
                 if line.trim().is_empty() {
@@ -158,7 +171,11 @@ async fn run_once(
                 run.terminated = true;
                 break;
             }
-            Ok(Err(error)) => {
+            Ok(Err(WireReadError::TooLong { limit })) => {
+                run.invalid.push(format!("line exceeded {limit} bytes"));
+                break;
+            }
+            Ok(Err(WireReadError::Io(error))) => {
                 run.invalid.push(format!("read error: {error}"));
                 break;
             }

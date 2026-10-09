@@ -65,6 +65,29 @@ async fn streams_results_from_a_subprocess_and_attaches_provider_name() {
 }
 
 #[tokio::test]
+async fn passes_environment_to_the_provider() {
+    let bin = example_binary();
+    let outcomes = collect(fanout(
+        FileQuery::new("hello"),
+        providers(vec![
+            SubprocessProvider::new("example", bin).env("CWM_EXAMPLE_TAG", "TAG")
+        ]),
+        Options::default(),
+    ))
+    .await;
+
+    let titles: Vec<String> = outcomes
+        .iter()
+        .filter_map(|outcome| outcome.as_result())
+        .filter_map(|result| result.title.clone())
+        .collect();
+    assert!(
+        titles.iter().any(|title| title.contains("TAG-")),
+        "expected an env-tagged title, got {titles:?}"
+    );
+}
+
+#[tokio::test]
 async fn provider_error_becomes_a_failure() {
     let outcomes = collect(fanout(
         FileQuery::new("x"),

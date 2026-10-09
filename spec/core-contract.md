@@ -134,7 +134,8 @@ fanout(query: FileQuery, providers: [SearchProvider], options?: Options)
 ## 9. Out-of-process wire format
 
 Providers may run as subprocesses, speaking **NDJSON** over stdin/stdout, so
-adapters can be written in any language.
+adapters can be written in any language. The host bounds each line (default
+8 MiB); a longer line is treated as `malformed`, never buffered without bound.
 
 Request:
 ```

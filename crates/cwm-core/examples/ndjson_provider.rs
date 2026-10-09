@@ -42,11 +42,17 @@ fn main() {
                 .ok()
                 .and_then(|value| value["params"]["query"]["text"].as_str().map(str::to_owned))
                 .unwrap_or_default();
+            let tag = std::env::var("CWM_EXAMPLE_TAG").unwrap_or_default();
+            let prefix = if tag.is_empty() {
+                String::new()
+            } else {
+                format!("{tag}-")
+            };
             let first = format!(
-                r#"{{"id":1,"result":{{"provider":"example","title":"{text}-0.bin","addresses":[{{"scheme":"https","uri":"https://example.org/{text}-0.bin"}}]}}}}"#
+                r#"{{"id":1,"result":{{"provider":"example","title":"{prefix}{text}-0.bin","addresses":[{{"scheme":"https","uri":"https://example.org/{prefix}{text}-0.bin"}}]}}}}"#
             );
             let second = format!(
-                r#"{{"id":1,"result":{{"provider":"example","title":"{text}-1.bin","addresses":[{{"scheme":"https","uri":"https://example.org/{text}-1.bin"}}]}}}}"#
+                r#"{{"id":1,"result":{{"provider":"example","title":"{prefix}{text}-1.bin","addresses":[{{"scheme":"https","uri":"https://example.org/{prefix}{text}-1.bin"}}]}}}}"#
             );
             let _ = writeln!(out, "{first}");
             let _ = writeln!(out, "{second}");

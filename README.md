@@ -50,6 +50,8 @@ A provider is one network or index. Two ways to plug one in:
 - **Rust:** implement the `SearchProvider` trait and pass it to `fanout`.
 - **Any language:** speak the NDJSON wire format (contract §9) and wrap the
   program with `SubprocessProvider` — the child is killed on cancellation.
+  Configuration (proxies, routers, data dirs) is passed via `.arg()` / `.env()`.
+  Output is read with a bound, so a hostile provider cannot exhaust memory.
 
 Test any provider against the contract with the conformance suite:
 
@@ -69,9 +71,9 @@ repo so that cloning this program never pulls in unrelated files.
 ## Status
 
 Contract v0 locked; Rust core implemented (fan-out, streaming, isolation,
-timeout, cancellation, NDJSON subprocess bridge); provider conformance suite
-(`cwm-conformance`); 21 tests green. Providers, keyword search, and all
-frontends are separate software.
+timeout, cancellation, bounded NDJSON subprocess bridge, provider env config);
+provider conformance suite (`cwm-conformance`); 25 tests green. Providers,
+keyword search, and all frontends are separate software.
 
 ## Contributing
 
