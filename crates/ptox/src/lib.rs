@@ -24,7 +24,7 @@ pub mod types;
 pub mod fetch;
 
 pub use engine::{Engine, SearchReport, SearchStream};
-pub use merge::{merge, suggest_filename, MergeOptions, MergedResult};
+pub use merge::{merge, result_id, suggest_filename, MergeOptions, MergedResult, ResultRef};
 pub use provider::*;
 pub use search::*;
 pub use types::*;

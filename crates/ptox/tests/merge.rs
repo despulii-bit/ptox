@@ -1,4 +1,6 @@
-use ptox::{merge, suggest_filename, Address, FileResult, MergeOptions, MergedResult};
+use ptox::{
+    merge, result_id, suggest_filename, Address, FileResult, MergeOptions, MergedResult, ResultRef,
+};
 use std::collections::HashMap;
 
 fn result(provider: &str, title: &str, sha256: Option<&str>, size: Option<u64>) -> FileResult {
@@ -207,4 +209,116 @@ fn persisted_merged_result_tolerates_added_and_missing_fields() {
     let result: MergedResult = serde_json::from_str(minimal).expect("deserialize minimal");
     assert!(result.providers.is_empty());
     assert_eq!(result.score, 0.0);
+}
+
+fn ref_source() -> MergedResult {
+    MergedResult {
+        title: Some("Annual Report".to_owned()),
+        size: Some(2048),
+        mimetype: Some("application/pdf".to_owned()),
+        hashes: HashMap::from([("sha256".to_owned(), "abc123".to_owned())]),
+        providers: vec!["archive-org".to_owned()],
+        addresses: vec![
+            Address::new("magnet", "magnet:?xt=urn:btih:deadbeef"),
+            Address::new("https", "https://example.org/report.pdf"),
+        ],
+        score: 7.5,
+        ..MergedResult::default()
+    }
+}
+
+#[test]
+fn result_id_prefers_content_hash_in_algorithm_order() {
+    let result = MergedResult {
+        title: Some("ignored".to_owned()),
+        size: Some(1),
+        hashes: HashMap::from([
+            ("sha1".to_owned(), "aaa".to_owned()),
+            ("sha256".to_owned(), "bbb".to_owned()),
+        ]),
+        ..MergedResult::default()
+    };
+    assert_eq!(result_id(&result), "sha256:bbb");
+}
+
+#[test]
+fn result_id_falls_back_in_order() {
+    let named = MergedResult {
+        title: Some("The  File.PDF".to_owned()),
+        size: Some(42),
+        addresses: vec![Address::new("https", "https://example.org/a")],
+        ..MergedResult::default()
+    };
+    assert_eq!(result_id(&named), "name:the file.pdf:42");
+
+    let addressed = MergedResult {
+        addresses: vec![Address::new("https", "https://example.org/a")],
+        ..MergedResult::default()
+    };
+    assert_eq!(result_id(&addressed), "uri:https://example.org/a");
+
+    assert_eq!(result_id(&MergedResult::default()), "anonymous");
+}
+
+#[test]
+fn result_ref_round_trips_through_serde() {
+    let original = ref_source();
+    let result_ref = ResultRef::from_merged(&original);
+    assert!(result_ref.is_current());
+    assert_eq!(result_ref.id, "sha256:abc123");
+
+    let json = serde_json::to_string(&result_ref).expect("serialize");
+    let decoded: ResultRef = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(decoded, result_ref);
+
+    let recovered = decoded.to_merged();
+    assert_eq!(recovered.title, original.title);
+    assert_eq!(recovered.size, original.size);
+    assert_eq!(recovered.mimetype, original.mimetype);
+    assert_eq!(recovered.hashes, original.hashes);
+    assert_eq!(recovered.addresses, original.addresses);
+    // Search-only fields are intentionally not persisted.
+    assert!(recovered.providers.is_empty());
+    assert_eq!(recovered.score, 0.0);
+}
+
+#[test]
+fn result_ref_preserves_the_suggested_filename() {
+    let original = ref_source();
+    let result_ref = ResultRef::from_merged(&original);
+    assert_eq!(
+        suggest_filename(&result_ref.to_merged()),
+        suggest_filename(&original)
+    );
+}
+
+#[test]
+fn result_ref_fixed_blob_stays_deserializable() {
+    // A blob shaped like what a 0.1.x client would have stored. If this stops
+    // parsing, an SDK upgrade has silently invalidated client state.
+    let json = r#"{
+        "version": 1,
+        "id": "sha256:abc",
+        "title": "annual-report.pdf",
+        "mimetype": "application/pdf",
+        "size": 12345,
+        "hashes": {"sha256": "abc"},
+        "addresses": [{"scheme": "https", "uri": "https://example.org/a.pdf"}]
+    }"#;
+    let result_ref: ResultRef = serde_json::from_str(json).expect("deserialize");
+    assert!(result_ref.is_current());
+    assert_eq!(result_ref.id, "sha256:abc");
+    assert_eq!(result_ref.to_merged().addresses.len(), 1);
+}
+
+#[test]
+fn result_ref_minimal_and_forward_blobs_are_tolerated() {
+    // Missing version defaults to the current one; unknown fields are ignored.
+    let minimal = r#"{"id":"anonymous","addresses":[{"scheme":"http","uri":"http://x/y"}]}"#;
+    let result_ref: ResultRef = serde_json::from_str(minimal).expect("deserialize minimal");
+    assert_eq!(result_ref.version, ResultRef::VERSION);
+    assert!(result_ref.is_current());
+
+    let forward = r#"{"version":1,"id":"sha256:x","addresses":[],"future":true}"#;
+    assert!(serde_json::from_str::<ResultRef>(forward).is_ok());
 }

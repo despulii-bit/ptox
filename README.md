@@ -41,7 +41,8 @@ repo per shared component — add a crate here.
   - `ptox::fetch` — the `Fetcher` contract and retrieval (feature `fetch`),
     including an HTTP gateway fetcher for `ipfs://` (feature `ipfs`).
   - `ptox::merge` — deduplicate + rank results from many providers, plus
-    `suggest_filename` for safe client-side naming.
+    `suggest_filename` for safe client-side naming and the versioned `ResultRef`
+    persistence handle.
 - `crates/ptox-conformance` — provider conformance suite (library + CLI).
 
 A client depends on `ptox`. Retrieval (`fetch` and the `ipfs` gateway) is on by
@@ -94,7 +95,7 @@ Private, pre-release. Contract **v2** locked (with a JSON Schema). The SDK is a
 single `ptox` crate with `types` / `search` / `provider` / `fetch` modules (fetch
 behind a feature); the conformance suite is the `ptox-conformance` crate.
 Providers, clients, ranking policy, and indexing are separate; the SDK supplies a
-default merge/rank. 102 tests green.
+default merge/rank. 109 tests green.
 
 ## Contributing
 

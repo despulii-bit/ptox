@@ -24,6 +24,10 @@ use std::collections::HashMap;
 ///
 /// In other words, an upgrade within `0.x`/`1.x` must not invalidate persisted
 /// client state. Treat the JSON keys as the interface, not the Rust field order.
+///
+/// To persist a result between a search and a later fetch, prefer the smaller
+/// [`ResultRef`], which keeps only the fetch-essential fields and carries its
+/// own schema version; `MergedResult` stays the in-memory aggregate.
 #[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct MergedResult {
     /// Human-readable title, taken from the first source that had one.
@@ -56,6 +60,162 @@ pub struct MergedResult {
     /// Heuristic rank. Higher is better; only comparable within one `merge`.
     #[serde(default)]
     pub score: f64,
+}
+
+/// A small, versioned handle to a [`MergedResult`], safe to persist.
+///
+/// Persisting a whole [`MergedResult`] couples a client's on-disk state to the
+/// SDK's internal aggregate, which also carries search-only fields (`providers`,
+/// `score`). `ResultRef` keeps only what is needed to retrieve and name a file,
+/// and carries its own [`version`](ResultRef::version) so the shape can evolve
+/// deliberately.
+///
+/// # Persistence
+///
+/// The serialized shape is a stability contract, exactly like [`MergedResult`]:
+/// fields are only **added** within a major version, each new field is
+/// `#[serde(default)]` and omitted when empty, and no field is removed,
+/// renamed, or retyped without a new major version and a changelog note. A blob
+/// written by an older SDK therefore still deserializes.
+///
+/// Build one with [`ResultRef::from_merged`] and turn it back into a fetchable
+/// [`MergedResult`] with [`ResultRef::to_merged`]. The reconstructed result's
+/// search-only fields are at their defaults, but
+/// [`crate::fetch::FetchRegistry::fetch_merged`] and [`suggest_filename`] only
+/// use the fields a `ResultRef` preserves.
+///
+/// ```
+/// use ptox::{Address, MergedResult, ResultRef};
+///
+/// let result = MergedResult {
+///     title: Some("report.pdf".into()),
+///     addresses: vec![Address::new("https", "https://example.org/report.pdf")],
+///     ..MergedResult::default()
+/// };
+///
+/// // Store the small handle, not the whole aggregate.
+/// let result_ref = ResultRef::from_merged(&result);
+/// let blob = serde_json::to_string(&result_ref).unwrap();
+///
+/// // Later (possibly on a newer SDK): resolve it back to a fetchable result.
+/// let restored: ResultRef = serde_json::from_str(&blob).unwrap();
+/// let result = restored.to_merged();
+/// assert_eq!(result.addresses.len(), 1);
+/// ```
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ResultRef {
+    /// Schema version of this handle. See [`ResultRef::VERSION`].
+    #[serde(default = "default_result_ref_version")]
+    pub version: u32,
+    /// Stable identity of the underlying content, from [`result_id`].
+    #[serde(default)]
+    pub id: String,
+    /// Human-readable title, when known. Used by [`suggest_filename`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// Media type of the content (e.g. `application/pdf`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mimetype: Option<String>,
+    /// Size in bytes, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size: Option<u64>,
+    /// Union of the sources' content hashes, keyed by algorithm name.
+    #[serde(default, skip_serializing_if = "HashAlgos::is_empty")]
+    pub hashes: HashAlgos,
+    /// Every way to obtain the content (deduplicated by URI).
+    #[serde(default)]
+    pub addresses: Vec<Address>,
+}
+
+fn default_result_ref_version() -> u32 {
+    ResultRef::VERSION
+}
+
+impl ResultRef {
+    /// The schema version written by this SDK build.
+    pub const VERSION: u32 = 1;
+
+    /// Build a handle from a merged result.
+    ///
+    /// The [`id`](ResultRef::id) is assigned by [`result_id`].
+    pub fn from_merged(result: &MergedResult) -> Self {
+        Self {
+            version: Self::VERSION,
+            id: result_id(result),
+            title: result.title.clone(),
+            mimetype: result.mimetype.clone(),
+            size: result.size,
+            hashes: result.hashes.clone(),
+            addresses: result.addresses.clone(),
+        }
+    }
+
+    /// Whether this handle was written by the current schema version.
+    ///
+    /// A newer handle may still deserialize (unknown fields are ignored and new
+    /// fields default), but callers that need the current semantics should check
+    /// this before trusting [`to_merged`](ResultRef::to_merged).
+    pub fn is_current(&self) -> bool {
+        self.version == Self::VERSION
+    }
+
+    /// Reconstruct a fetchable [`MergedResult`] from this handle.
+    ///
+    /// Search-only fields (`providers`, `score`) are not part of a `ResultRef`
+    /// and come back at their defaults; retrieval and filename suggestion do not
+    /// use them.
+    pub fn to_merged(&self) -> MergedResult {
+        MergedResult {
+            title: self.title.clone(),
+            size: self.size,
+            mimetype: self.mimetype.clone(),
+            hashes: self.hashes.clone(),
+            addresses: self.addresses.clone(),
+            ..MergedResult::default()
+        }
+    }
+}
+
+impl From<&MergedResult> for ResultRef {
+    fn from(result: &MergedResult) -> Self {
+        Self::from_merged(result)
+    }
+}
+
+impl From<&ResultRef> for MergedResult {
+    fn from(result_ref: &ResultRef) -> Self {
+        result_ref.to_merged()
+    }
+}
+
+/// A stable, deterministic identifier for a [`MergedResult`], computed offline.
+///
+/// Chosen in order:
+///
+/// 1. a content hash, in the same algorithm order [`merge`] deduplicates on
+///    (`sha256`, `sha1`, `infohash`, `md5`, `cid`), as `<algo>:<value>`;
+/// 2. otherwise `name:<normalized title>:<size>` when both are present;
+/// 3. otherwise `uri:<preferred address uri>`;
+/// 4. otherwise `"anonymous"`.
+///
+/// A content hash makes the id exact and stable across searches; the fallbacks
+/// are only as stable as the metadata they use.
+pub fn result_id(result: &MergedResult) -> String {
+    for algorithm in ["sha256", "sha1", "infohash", "md5", "cid"] {
+        if let Some(value) = result.hashes.get(algorithm) {
+            return format!("{algorithm}:{value}");
+        }
+    }
+    if let (Some(title), Some(size)) = (&result.title, result.size) {
+        let normalized = normalize(title);
+        if !normalized.is_empty() {
+            return format!("name:{normalized}:{size}");
+        }
+    }
+    if let Some(address) = preferred_address(result) {
+        return format!("uri:{}", address.uri);
+    }
+    "anonymous".to_owned()
 }
 
 /// Ranking policy for [`merge`], supplied by the caller.

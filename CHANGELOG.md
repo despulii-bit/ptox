@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `merge::ResultRef`: a small, versioned persistence handle that decouples client
+  state from the full `MergedResult` serde shape. It keeps only what is needed to
+  retrieve and name a file — a stable `id`, `title`, `mimetype`, `size`,
+  `hashes`, and `addresses` — plus its own `version`. `ResultRef::from_merged` /
+  `to_merged` convert both ways, and `merge::result_id` derives a deterministic
+  identity (a content hash when present, else title+size, else the preferred
+  URI). `ResultRef`'s serialized shape is a stability contract, exactly like
+  `MergedResult`'s.
 - `fetch`: an optional HTTP retry policy. `HttpFetcher::with_retry` takes a
   `RetryPolicy` (off by default) that replays idempotent GETs after transient
   failures — connection errors, mid-stream read errors, and `408`/`429`/`5xx`
