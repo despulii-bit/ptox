@@ -4,14 +4,15 @@ Thanks for helping build a composable, multi-network file-search core.
 
 ## What belongs where
 
-This repo is **only the core and reference providers**. The design deliberately
-pushes everything else into separate software:
+This repo is the **shared SDK**: the contracts, the engines, and the tooling that
+clients and providers build on.
 
-- **Welcome here:** core changes, new **providers** (one per network or index),
-  contract/spec improvements, docs, and tests.
-- **Belongs elsewhere:** frontends (CLI/TUI/GUI), the retrieval/fetch fabric,
-  merge/dedup/ranking, index/crawler services, and plugin discovery. These
-  *consume* the contract; they do not live in this repo.
+- **Welcome here:** the core (contracts, the `fanout` engine, `merge`, the
+  `fetch` fabric, the wire bridge, and the opt-in config schema), contract/spec
+  improvements, the conformance suite, docs, and tests.
+- **Belongs elsewhere:** frontends (CLI/TUI/GUI), **providers** (one per network
+  or index — separate repos), index/crawler services, and plugin discovery.
+  These *consume* the SDK; they do not live in this repo.
 
 If you're unsure whether something fits, open an issue first.
 
@@ -113,7 +114,9 @@ resolver). The existing conformance suite encodes the contract — keep it green
 - **Never auto-fetch** an `Address`.
 - Unknown fields must be tolerated at every level; don't reject wire messages for
   extra keys.
-- Changing the contract requires a version bump and a spec update in the same PR.
+- Changing the contract requires a spec update in the same PR. Breaking changes
+  also bump the contract version; additive optional fields and clarifying
+  behavior changes do not (see `spec/core-contract.md` §10).
 
 ## Repository hygiene
 

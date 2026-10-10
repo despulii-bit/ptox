@@ -29,15 +29,17 @@ sha2 = { version = "0.10", optional = true }
 toml = { version = "0.8", optional = true }
 
 [features]
-default = ["fetch", "ipfs", "config"]
+default = ["fetch"]
 # Retrieval fabric (`Fetcher`, `FetchRegistry`, HTTP/command fetchers).
 fetch = ["dep:hex", "dep:reqwest", "dep:sha2"]
 # `ipfs://` retrieval through a configurable HTTP gateway (implies `fetch`).
+# Opt-in: a network transport the core does not assume.
 ipfs = ["fetch"]
 # `file://` retrieval from the local filesystem (implies `fetch`). Off by
 # default: it grants read access to any path the process can read.
 file = ["fetch"]
 # Canonical provider/fetcher configuration schema + TOML loader (implies `fetch`).
+# Opt-in: client wiring, not core behavior.
 config = ["dep:toml", "fetch"]
 
 [[example]]

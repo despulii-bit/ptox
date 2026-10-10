@@ -49,9 +49,9 @@ helpers normalize case and leading dots; empty collections clear their field.
 `with_offset(page * size).with_limit(size)` requests one page.
 
 Retrieval (the `fetch` feature, on by default) turns a result's `Address` into
-bytes: `Engine::fetch(&result, "out.bin").await`. The `ipfs` feature (also on by
-default) adds an `ipfs://` gateway fetcher, `IpfsGatewayFetcher`, which resolves
-CIDs through a configurable HTTP gateway and delegates to the HTTP fetcher. The
+bytes: `Engine::fetch(&result, "out.bin").await`. The opt-in `ipfs` feature adds
+an `ipfs://` gateway fetcher, `IpfsGatewayFetcher`, which resolves CIDs through a
+configurable HTTP gateway and delegates to the HTTP fetcher. The
 **off-by-default** `file` feature adds `FileFetcher` for `file://` addresses; it
 copies a local file atomically with sha256 verification and can be restricted to
 a data directory with `FileFetcher::with_allowed_roots` (a `file://` address is a
@@ -78,8 +78,8 @@ which keeps only the fetch-essential fields and carries its own schema version.
 suggests a safe name for the file (the title, else the preferred address, with
 illegal characters replaced).
 
-Client wiring has a canonical, versioned TOML schema in `ptox::config` (feature
-`config`, on by default): `Config::load` / `from_toml_str` parse and validate it,
+Client wiring has a canonical, versioned TOML schema in `ptox::config` (opt-in
+feature `config`): `Config::load` / `from_toml_str` parse and validate it,
 and `Config::providers()` / `fetch_registry()` / `merge_options()` build the
 pieces a client needs. See `docs/configuration.md` in the repository.
 

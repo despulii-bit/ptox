@@ -5,7 +5,7 @@ defines the canonical, versioned TOML shape for that wiring, so clients,
 examples, and tooling can agree on one format instead of each inventing their
 own.
 
-The schema lives in the SDK behind the `config` feature (on by default):
+The schema lives in the SDK behind the opt-in `config` feature:
 
 ```rust
 use ptox::Config;
@@ -142,9 +142,8 @@ from output when empty. Use `Config::to_toml_string()` to write a config back ou
 (for example a `config init` command); it round-trips through
 `Config::from_toml_str`.
 
-Enable the `config` feature to use this module (it is on by default and implies
-`fetch`). Disable default features for a search-only build that does not need
-the TOML loader.
+Enable the `config` feature to use this module (opt-in; it implies `fetch`). The
+default build omits the TOML loader and its `toml` dependency.
 
 [`CommandFetcher`]: https://docs.rs/ptox/latest/ptox/fetch/struct.CommandFetcher.html
 [`CONFIG_VERSION`]: https://docs.rs/ptox/latest/ptox/config/constant.CONFIG_VERSION.html

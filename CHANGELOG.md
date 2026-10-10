@@ -133,7 +133,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Linked from both READMEs.
 
 - `config`: a canonical, versioned provider/fetcher configuration schema. The
-  new `Config` type (feature `config`, on by default) models `[[provider]]`
+  new `Config` type (opt-in feature `config`) models `[[provider]]`
   commands, `[ranking] weights`, and `[fetch.commands.<scheme>]` delegations in
   one documented TOML shape. `Config::load` / `from_toml_str` parse and validate
   it (supported `version`, unique non-empty provider names, non-empty programs,
@@ -189,7 +189,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   SDK can retrieve out of the box—with the same atomic writes, hash
   verification, and progress reporting. `DEFAULT_IPFS_GATEWAY` is a public
   convenience; production clients should pass their own gateway. Behind the new
-  `ipfs` feature (on by default), and registered by `FetchRegistry::with_defaults`
+  `ipfs` feature (opt-in), and registered by `FetchRegistry::with_defaults`
   when enabled.
 - `fetch`: optional progress reporting. `Fetcher::fetch_with_progress`,
   `FetchRegistry::fetch_with_progress` / `fetch_merged_with_progress`, and

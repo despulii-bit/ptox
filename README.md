@@ -14,7 +14,7 @@ It has three parts:
   Capability probing is concurrent and can be memoized per engine.
 - **Tooling** — the conformance suite and the wire schema.
 
-It does **not** include networks or user interfaces. Those are built on top:
+It does **not** include providers or user interfaces. Those are built on top:
 
 - **Providers** adapt one network (e.g. clearnet, I2P, Freenet, IPFS, BitTorrent).
 - **Clients** are frontends (CLI, GUI, agent) that assemble the SDK.
@@ -49,11 +49,14 @@ repo per shared component — add a crate here.
     loader (feature `config`).
 - `crates/ptox-conformance` — provider conformance suite (library + CLI).
 
-A client depends on `ptox`. Retrieval (`fetch` and the `ipfs` gateway) and the
-config loader are on by default; disable default features for a search-only
-build. The `file://` fetcher is an explicit opt-in: enable the `file` feature to
-fetch local addresses (see [`docs/fetching.md`](docs/fetching.md) for the policy
-implications). A provider author uses `ptox::types` + `ptox::search` and tests with
+A client depends on `ptox`. Only `fetch` (the retrieval fabric) is on by
+default; disable default features for a search-only build. The `ipfs://` gateway
+fetcher (feature `ipfs`), the `file://` fetcher (feature `file`, a
+filesystem-read capability), and the canonical config schema (feature `config`)
+are opt-in, so the default build stays minimal. See
+[`docs/fetching.md`](docs/fetching.md) for retrieval policy and
+[`docs/configuration.md`](docs/configuration.md) for the config schema. A
+provider author uses `ptox::types` + `ptox::search` and tests with
 `ptox-conformance`.
 
 ## Development
@@ -151,10 +154,11 @@ private repo so that cloning this SDK never pulls in unrelated files.
 ## Status
 
 Private, pre-release. Contract **v2** locked (with a JSON Schema). The SDK is a
-single `ptox` crate with `types` / `search` / `provider` / `fetch` modules (fetch
-behind a feature); the conformance suite is the `ptox-conformance` crate.
-Providers, clients, ranking policy, and indexing are separate; the SDK supplies a
-default merge/rank. 186 tests green (200 with `--all-features`).
+single `ptox` crate (`types`, `search`, `provider`, `merge`, `engine`, `fetch`,
+and the opt-in `config`); the conformance suite is the `ptox-conformance` crate.
+`fetch` is on by default; `ipfs`, `file`, and `config` are opt-in. Providers,
+clients, ranking policy, and indexing are separate; the SDK supplies a default
+merge/rank. 161 tests green (203 with `--all-features`).
 
 ## Contributing
 

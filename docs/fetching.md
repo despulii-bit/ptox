@@ -6,9 +6,9 @@ end: the scheme registry, how a fetch is performed, multi-source failover,
 progress, delegated commands, the IPFS gateway, and retries.
 
 The code lives in `ptox::fetch`, behind the `fetch` feature (on by default). The
-`ipfs` gateway fetcher is behind the `ipfs` feature (also on by default), a
+`ipfs` gateway fetcher is behind the opt-in `ipfs` feature, a
 local-filesystem fetcher is behind the **off-by-default** `file` feature, and the
-canonical TOML wiring for fetchers is behind `config` (see
+canonical TOML wiring for fetchers is behind the opt-in `config` feature (see
 [`configuration.md`](configuration.md)).
 
 ## Quick start
