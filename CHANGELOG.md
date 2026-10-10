@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `fetch`: registry introspection. `FetchRegistry::schemes()` returns every
+  address scheme the registry can resolve (sorted, deduplicated), so a client can
+  report what it can fetch without re-deriving the set from its own config.
+  `FetchRegistry` also implements `Display`, printing one line per registered
+  fetcher in registration order (`name (scheme, scheme)`) for diagnostics; unlike
+  `schemes()` it preserves precedence when two fetchers claim a scheme.
+
 - Search paging. `FileQuery` gains `offset`, the per-provider counterpart to
   `limit`: a provider skips its first N matches, then returns at most `limit`, so
   a client can request the next page without re-fetching and discarding the

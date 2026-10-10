@@ -100,6 +100,29 @@ assert!(registry.fetcher_for("magnet").is_none());
 - `register` returns `&mut Self`, so calls chain.
 - `fetcher_for(scheme)` returns the `Arc<dyn Fetcher>` that would handle it, or
   `None`.
+- `schemes()` returns every scheme the registry can resolve, sorted and
+  deduplicated. Use it to show a client which address types it can actually
+  fetch instead of re-deriving the set from its own config.
+- `FetchRegistry` implements `Display`: printing it gives one line per
+  registered fetcher, in registration order, as `name (scheme, scheme)`. That
+  includes registration precedence, which `schemes()` intentionally drops (the
+  first fetcher registered for a scheme still wins). It is meant for humans and
+  error messages, not for parsing.
+
+```rust
+use ptox::{CommandFetcher, FetchRegistry};
+use std::sync::Arc;
+
+let mut registry = FetchRegistry::new();
+registry.register(Arc::new(CommandFetcher::new(
+    "aria2",
+    vec!["magnet".to_owned()],
+    "aria2c",
+    vec![],
+)));
+assert_eq!(registry.schemes(), vec!["magnet".to_owned()]);
+assert_eq!(registry.to_string(), "aria2 (magnet)");
+```
 
 `FetchRegistry::fetch` fails with `FetchError::Unsupported(scheme)` when no
 fetcher is registered, so an unknown scheme is a clear error rather than a

@@ -1314,3 +1314,68 @@ fn defaults_resolve_file_when_the_feature_is_on() {
         "with_defaults must include the file fetcher"
     );
 }
+
+#[test]
+fn registry_schemes_are_sorted_and_deduplicated() {
+    let mut registry = FetchRegistry::new();
+    assert!(registry.schemes().is_empty());
+
+    registry.register(Arc::new(CommandFetcher::new(
+        "alpha",
+        vec!["magnet".to_owned(), "https".to_owned()],
+        "true",
+        Vec::new(),
+    )));
+    registry.register(Arc::new(CommandFetcher::new(
+        "beta",
+        vec!["https".to_owned(), "dht".to_owned()],
+        "true",
+        Vec::new(),
+    )));
+
+    assert_eq!(
+        registry.schemes(),
+        vec!["dht".to_owned(), "https".to_owned(), "magnet".to_owned()]
+    );
+    // Deduplication does not change precedence: the first fetcher wins.
+    assert_eq!(
+        registry.fetcher_for("https").expect("https").name(),
+        "alpha"
+    );
+}
+
+#[test]
+fn registry_display_lists_fetchers_and_schemes() {
+    assert_eq!(FetchRegistry::new().to_string(), "(no fetchers)");
+
+    let mut registry = FetchRegistry::new();
+    registry.register(Arc::new(CommandFetcher::new(
+        "aria2",
+        vec!["magnet".to_owned(), "torrent".to_owned()],
+        "aria2c",
+        Vec::new(),
+    )));
+    registry.register(Arc::new(HttpFetcher::new()));
+
+    assert_eq!(
+        registry.to_string(),
+        "aria2 (magnet, torrent)\nhttp (http, https)"
+    );
+}
+
+#[cfg(feature = "ipfs")]
+#[test]
+fn defaults_report_their_schemes() {
+    let registry = FetchRegistry::with_defaults();
+    for scheme in ["http", "https", "ipfs"] {
+        assert!(
+            registry.schemes().iter().any(|name| name == scheme),
+            "with_defaults must resolve `{scheme}`: {}",
+            registry.schemes().join(", ")
+        );
+    }
+    // Display is one line per built-in fetcher, in registration order.
+    let summary = registry.to_string();
+    assert!(summary.starts_with("http (http, https)\n"), "{summary}");
+    assert!(summary.contains("ipfs-gateway (ipfs)"), "{summary}");
+}

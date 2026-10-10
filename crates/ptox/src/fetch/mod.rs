@@ -188,6 +188,25 @@ impl FetchRegistry {
             .cloned()
     }
 
+    /// Every address scheme this registry can resolve, sorted and deduplicated.
+    ///
+    /// This is the authoritative answer to "which schemes work?"; a client no
+    /// longer has to infer it from its own config. A scheme registered by more
+    /// than one fetcher appears once — the **first** registered fetcher still
+    /// wins at fetch time (see [`FetchRegistry::fetcher_for`]). For the
+    /// per-fetcher breakdown, including registration precedence, print the
+    /// registry (it implements [`std::fmt::Display`]).
+    pub fn schemes(&self) -> Vec<String> {
+        let mut schemes: Vec<String> = self
+            .fetchers
+            .iter()
+            .flat_map(|fetcher| fetcher.schemes().iter().cloned())
+            .collect();
+        schemes.sort();
+        schemes.dedup();
+        schemes
+    }
+
     /// Fetch `address` into `destination`, verifying `expected_sha256` if given.
     pub async fn fetch(
         &self,
@@ -281,6 +300,38 @@ impl FetchRegistry {
         }
         let count = errors.len();
         Err(FetchError::AllFailed { count, errors })
+    }
+}
+
+impl std::fmt::Display for FetchRegistry {
+    /// A diagnostics summary of the registry, one line per registered fetcher in
+    /// registration order:
+    ///
+    /// ```text
+    /// http (http, https)
+    /// ipfs-gateway (ipfs)
+    /// ```
+    ///
+    /// The format is intended for humans and error messages, not for machines;
+    /// the machine-readable list is [`FetchRegistry::schemes`].
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.fetchers.is_empty() {
+            return formatter.write_str("(no fetchers)");
+        }
+        for (index, fetcher) in self.fetchers.iter().enumerate() {
+            if index > 0 {
+                formatter.write_str("\n")?;
+            }
+            write!(formatter, "{} (", fetcher.name())?;
+            for (scheme_index, scheme) in fetcher.schemes().iter().enumerate() {
+                if scheme_index > 0 {
+                    formatter.write_str(", ")?;
+                }
+                formatter.write_str(scheme)?;
+            }
+            formatter.write_str(")")?;
+        }
+        Ok(())
     }
 }
 
