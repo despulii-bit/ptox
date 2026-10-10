@@ -116,6 +116,17 @@ full field reference is in
 [**docs/configuration.md**](docs/configuration.md), with a runnable example in
 [`crates/ptox/examples/config.rs`](crates/ptox/examples/config.rs).
 
+## Fetching a result
+
+Retrieval turns a result's `Address` into bytes on disk. `Engine::fetch` /
+`FetchRegistry::fetch_merged` pick the best mirror and fail over when it is dead,
+verify the result's sha256, and write atomically; `fetch_with_progress` reports
+cumulative bytes for a progress bar. Built-in schemes are `http`/`https` and an
+`ipfs://` HTTP gateway (feature `ipfs`), and any other scheme can be delegated to
+an external command (`magnet` → `aria2c`, …). The end-to-end guide — scheme
+registry, the `CommandFetcher` `{dest}` contract, gateway policy, failover, and
+retries — is in [**docs/fetching.md**](docs/fetching.md).
+
 ## Development files
 
 Agent/development scaffolding does **not** live here. It is tracked in a separate

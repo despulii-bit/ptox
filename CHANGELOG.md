@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Documentation: `docs/fetching.md`, an end-to-end guide to the retrieval side —
+  the scheme registry, atomic write + hash verification, multi-source failover,
+  progress reporting, the `CommandFetcher` `{dest}` contract (and the 0-byte
+  "success" it used to hide), IPFS gateway policy, and opt-in HTTP retries.
+  Linked from both READMEs.
+
 - `config`: a canonical, versioned provider/fetcher configuration schema. The
   new `Config` type (feature `config`, on by default) models `[[provider]]`
   commands, `[ranking] weights`, and `[fetch.commands.<scheme>]` delegations in

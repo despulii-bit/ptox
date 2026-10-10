@@ -28,6 +28,9 @@ default) adds an `ipfs://` gateway fetcher, `IpfsGatewayFetcher`, which resolves
 CIDs through a configurable HTTP gateway and delegates to the HTTP fetcher.
 `HttpFetcher::with_retry` can replay transient GET failures (`5xx`, `408`, `429`,
 connection/stream errors) with exponential backoff; retries are off by default.
+Other schemes (e.g. `magnet`) can be delegated to an external command, and
+multiple mirrors of a result are tried in preference order. See
+`docs/fetching.md` in the repository for the end-to-end retrieval guide.
 
 Providers (network plugins) and clients (frontends) are separate software. The
 contract, JSON Schema, and conformance suite live in the repository:
