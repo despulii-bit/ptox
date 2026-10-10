@@ -151,13 +151,22 @@ pub(crate) fn preferred_address(result: &MergedResult) -> Option<&Address> {
     result
         .addresses
         .iter()
-        .min_by_key(|address| match address.scheme.as_str() {
-            "https" => 0,
-            "http" => 1,
-            "ipfs" => 2,
-            "magnet" => 3,
-            _ => 4,
-        })
+        .min_by_key(|address| address_rank(&address.scheme))
+}
+
+/// Preference rank for an address scheme; lower is preferred.
+///
+/// `https` > `http` > `ipfs` > `magnet` > other. The ordering is shared by
+/// [`preferred_address`] and `fetch::preferred_addresses` so a suggested
+/// filename and the address actually fetched agree.
+pub(crate) fn address_rank(scheme: &str) -> u8 {
+    match scheme {
+        "https" => 0,
+        "http" => 1,
+        "ipfs" => 2,
+        "magnet" => 3,
+        _ => 4,
+    }
 }
 
 fn sanitize_filename(name: &str) -> String {

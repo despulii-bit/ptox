@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `fetch`: multi-address failover. `FetchRegistry::fetch_merged` and
+  `Engine::fetch` now try every address of a `MergedResult` in preference order
+  (`https` > `http` > `ipfs` > `magnet` > other) until one succeeds, so a dead
+  mirror no longer fails the whole retrieval. The winning address is reported on
+  the new `Fetched::address` field; when every address fails, the new
+  `FetchError::AllFailed` aggregates the per-attempt errors. `preferred_addresses`
+  exposes the ordering, and progress stays monotonic across a failed attempt
+  (a dead mirror's partial bytes never make the bar jump backwards).
 - `merge::suggest_filename`: a deterministic, offline helper that turns a
   `MergedResult` into a safe filename — the title, else the last path segment of
   the preferred address, else `download.bin` — replacing characters that are

@@ -94,7 +94,7 @@ Private, pre-release. Contract **v2** locked (with a JSON Schema). The SDK is a
 single `ptox` crate with `types` / `search` / `provider` / `fetch` modules (fetch
 behind a feature); the conformance suite is the `ptox-conformance` crate.
 Providers, clients, ranking policy, and indexing are separate; the SDK supplies a
-default merge/rank. 87 tests green.
+default merge/rank. 92 tests green.
 
 ## Contributing
 

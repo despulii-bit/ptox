@@ -126,7 +126,10 @@ impl Fetcher for IpfsGatewayFetcher {
     }
 
     async fn fetch(&self, request: &FetchRequest) -> Result<Fetched, FetchError> {
-        self.http.fetch(&self.rewrite(request)?).await
+        let mut fetched = self.http.fetch(&self.rewrite(request)?).await?;
+        // Report the original `ipfs://` address, not the rewritten gateway URL.
+        fetched.address = request.address.clone();
+        Ok(fetched)
     }
 
     async fn fetch_with_progress(
@@ -134,9 +137,12 @@ impl Fetcher for IpfsGatewayFetcher {
         request: &FetchRequest,
         progress: &ProgressFn<'_>,
     ) -> Result<Fetched, FetchError> {
-        self.http
+        let mut fetched = self
+            .http
             .fetch_with_progress(&self.rewrite(request)?, progress)
-            .await
+            .await?;
+        fetched.address = request.address.clone();
+        Ok(fetched)
     }
 }
 

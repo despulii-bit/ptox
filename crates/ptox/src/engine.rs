@@ -189,7 +189,8 @@ impl Engine {
         (providers, skipped)
     }
 
-    /// Fetch the preferred address of a result.
+    /// Fetch a result, trying its addresses in preference order until one
+    /// succeeds (multi-source failover), and verifying its sha256.
     #[cfg(feature = "fetch")]
     pub async fn fetch(
         &self,
@@ -201,6 +202,9 @@ impl Engine {
 
     /// Like [`Engine::fetch`], but report cumulative retrieved bytes to
     /// `progress` as they arrive, so a client can render a progress bar.
+    ///
+    /// Progress stays monotonic across failover; see
+    /// [`FetchRegistry::fetch_merged_with_progress`].
     #[cfg(feature = "fetch")]
     pub async fn fetch_with_progress(
         &self,

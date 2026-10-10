@@ -120,5 +120,6 @@ async fn download(
         path: request.destination.clone(),
         bytes: total,
         sha256: Some(digest),
+        address: request.address.clone(),
     })
 }

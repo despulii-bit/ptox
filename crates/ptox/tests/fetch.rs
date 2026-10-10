@@ -460,3 +460,138 @@ async fn defaults_resolve_ipfs_when_the_feature_is_on() {
         "with_defaults must include the ipfs gateway fetcher"
     );
 }
+
+#[test]
+fn preferred_addresses_are_ordered_by_scheme_then_registration() {
+    use ptox::{preferred_addresses, MergedResult};
+
+    let result = MergedResult {
+        addresses: vec![
+            Address::new("magnet", "magnet:?xt=urn:btih:abc"),
+            Address::new("http", "http://mirror-a/file"),
+            Address::new("https", "https://mirror-b/file"),
+            Address::new("http", "http://mirror-c/file"),
+        ],
+        ..Default::default()
+    };
+
+    let ordered: Vec<&str> = preferred_addresses(&result)
+        .into_iter()
+        .map(|address| address.uri.as_str())
+        .collect();
+    assert_eq!(
+        ordered,
+        vec![
+            "https://mirror-b/file",
+            "http://mirror-a/file",
+            "http://mirror-c/file",
+            "magnet:?xt=urn:btih:abc",
+        ]
+    );
+}
+
+#[tokio::test]
+async fn fetch_merged_falls_back_to_a_working_address() {
+    use ptox::MergedResult;
+
+    let body: &'static [u8] = b"mirror payload";
+    let good = serve_once(body).await;
+    let result = MergedResult {
+        addresses: vec![
+            // Preferred by scheme (`https`), but the port is closed.
+            Address::new("https", "http://127.0.0.1:1/dead"),
+            Address::new("http", good.clone()),
+        ],
+        ..Default::default()
+    };
+    let dest = temp_dest("failover");
+    let registry = FetchRegistry::with_defaults();
+
+    let fetched = registry
+        .fetch_merged(&result, dest.clone())
+        .await
+        .expect("fallback to the second address");
+
+    assert_eq!(fetched.bytes, body.len() as u64);
+    assert_eq!(fetched.address.uri, good, "the winning address is reported");
+    assert_eq!(std::fs::read(&dest).expect("read"), body);
+    let _ = std::fs::remove_file(&dest);
+}
+
+#[tokio::test]
+async fn fetch_merged_reports_all_failures() {
+    use ptox::MergedResult;
+
+    let result = MergedResult {
+        addresses: vec![
+            Address::new("http", "http://127.0.0.1:1/one"),
+            Address::new("http", "http://127.0.0.1:1/two"),
+        ],
+        ..Default::default()
+    };
+    let registry = FetchRegistry::with_defaults();
+
+    let error = registry
+        .fetch_merged(&result, temp_dest("all-fail"))
+        .await
+        .expect_err("every address is dead");
+
+    match error {
+        FetchError::AllFailed { count, errors } => {
+            assert_eq!(count, 2);
+            assert_eq!(errors.len(), 2, "each failure is preserved");
+        }
+        other => panic!("expected AllFailed, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn fetch_merged_failover_keeps_progress_monotonic() {
+    use ptox::MergedResult;
+
+    let body: &'static [u8] = b"mirror payload";
+    let truncated = serve_truncated().await;
+    let good = serve_once(body).await;
+    let result = MergedResult {
+        addresses: vec![
+            Address::new("http", truncated),
+            Address::new("http", good.clone()),
+        ],
+        ..Default::default()
+    };
+    let dest = temp_dest("failover-progress");
+    let registry = FetchRegistry::with_defaults();
+    let seen = std::sync::Mutex::new(Vec::new());
+
+    let fetched = registry
+        .fetch_merged_with_progress(&result, dest.clone(), &|bytes: u64| {
+            seen.lock().expect("lock").push(bytes)
+        })
+        .await
+        .expect("fallback");
+
+    assert_eq!(fetched.address.uri, good);
+    let seen = seen.into_inner().expect("lock");
+    assert!(
+        seen.windows(2).all(|pair| pair[0] <= pair[1]),
+        "progress must not regress across failover: {seen:?}"
+    );
+    assert_eq!(
+        *seen.last().expect("last"),
+        body.len() as u64,
+        "the final report is the winning address's size"
+    );
+    let _ = std::fs::remove_file(&dest);
+}
+
+#[tokio::test]
+async fn fetch_merged_with_no_addresses_is_a_no_address_error() {
+    use ptox::MergedResult;
+
+    let registry = FetchRegistry::with_defaults();
+    let error = registry
+        .fetch_merged(&MergedResult::default(), temp_dest("no-address"))
+        .await
+        .expect_err("no addresses");
+    assert!(matches!(error, FetchError::NoAddress));
+}

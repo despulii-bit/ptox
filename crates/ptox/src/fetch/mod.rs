@@ -64,6 +64,14 @@ pub enum FetchError {
     /// content identifier).
     #[error("invalid address: {0}")]
     InvalidAddress(String),
+    /// Every address of a result failed to retrieve.
+    #[error("all {count} address(es) failed")]
+    AllFailed {
+        /// How many addresses were tried.
+        count: usize,
+        /// The individual failures, in the order the addresses were tried.
+        errors: Vec<FetchError>,
+    },
 }
 
 /// A single retrieval job: one address, one destination path.
@@ -86,6 +94,11 @@ pub struct Fetched {
     pub bytes: u64,
     /// sha256 of the retrieved bytes (lowercase hex), when computed.
     pub sha256: Option<String>,
+    /// The address the bytes were actually retrieved from.
+    ///
+    /// With multi-address failover ([`FetchRegistry::fetch_merged`]) this is the
+    /// first address that succeeded, which may not have been the preferred one.
+    pub address: Address,
 }
 
 /// A progress observer, called with the cumulative number of bytes retrieved so
@@ -198,7 +211,15 @@ impl FetchRegistry {
             .await
     }
 
-    /// Fetch the preferred address of a merged result, verifying its sha256.
+    /// Fetch a merged result, trying its addresses in preference order until
+    /// one succeeds (multi-source failover), and verifying its sha256.
+    ///
+    /// Addresses are ordered by scheme (`https` > `http` > `ipfs` > `magnet` >
+    /// other), preserving the result's own order within a scheme; see
+    /// [`preferred_addresses`]. The winning address is recorded on
+    /// [`Fetched::address`]. Fails with [`FetchError::NoAddress`] when the
+    /// result has no addresses, or [`FetchError::AllFailed`] (carrying every
+    /// attempt's error) when all of them fail.
     pub async fn fetch_merged(
         &self,
         result: &MergedResult,
@@ -210,20 +231,44 @@ impl FetchRegistry {
 
     /// Like [`FetchRegistry::fetch_merged`], but report cumulative retrieved
     /// bytes to `progress` as they arrive.
+    ///
+    /// The reported total is kept monotonic across failover: if one address
+    /// fails part-way and the next succeeds, the bar never jumps backwards, and
+    /// the final report equals the size of the address that won.
     pub async fn fetch_merged_with_progress(
         &self,
         result: &MergedResult,
         destination: impl Into<PathBuf>,
         progress: &ProgressFn<'_>,
     ) -> Result<Fetched, FetchError> {
-        let address = preferred_address(result).ok_or(FetchError::NoAddress)?;
-        self.fetch_with_progress(
-            address,
-            destination,
-            expected_sha256(result, address),
-            progress,
-        )
-        .await
+        let destination = destination.into();
+        let addresses = preferred_addresses(result);
+        if addresses.is_empty() {
+            return Err(FetchError::NoAddress);
+        }
+
+        // A failed attempt may already have reported bytes; clamp later reports
+        // to the high-water mark so progress never regresses.
+        let high_water = std::sync::atomic::AtomicU64::new(0);
+        let mut errors = Vec::new();
+        for address in addresses {
+            let expected = expected_sha256(result, address);
+            let monotonic = |bytes: u64| {
+                let previous = high_water.fetch_max(bytes, std::sync::atomic::Ordering::Relaxed);
+                if bytes > previous {
+                    progress(bytes);
+                }
+            };
+            match self
+                .fetch_with_progress(address, destination.clone(), expected, &monotonic)
+                .await
+            {
+                Ok(fetched) => return Ok(fetched),
+                Err(error) => errors.push(error),
+            }
+        }
+        let count = errors.len();
+        Err(FetchError::AllFailed { count, errors })
     }
 }
 
@@ -267,6 +312,17 @@ pub fn verify_sha256(expected: Option<&str>, actual: &str) -> Result<(), FetchEr
 /// filename and the address that is actually fetched agree.
 pub fn preferred_address(result: &MergedResult) -> Option<&Address> {
     crate::merge::preferred_address(result)
+}
+
+/// Every address of a result, ordered by preference: `https` > `http` > `ipfs`
+/// > `magnet` > other, preserving the result's own order within a scheme.
+///
+/// This is the order [`FetchRegistry::fetch_merged`] tries addresses in when it
+/// fails over from a dead mirror.
+pub fn preferred_addresses(result: &MergedResult) -> Vec<&Address> {
+    let mut addresses: Vec<&Address> = result.addresses.iter().collect();
+    addresses.sort_by_key(|address| crate::merge::address_rank(&address.scheme));
+    addresses
 }
 
 /// The expected sha256 for a result/address, if either carries one.

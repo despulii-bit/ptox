@@ -144,6 +144,7 @@ impl CommandFetcher {
             path: request.destination.clone(),
             bytes,
             sha256: digest,
+            address: request.address.clone(),
         })
     }
 }
