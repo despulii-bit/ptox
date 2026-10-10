@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `fetch`: `ProxyConfig` and `HttpFetcher::with_proxy`, routing requests through
+  an HTTP (`http://`) or SOCKS5 (`socks5://` / `socks5h://`) proxy. Overlay
+  networks (Tor, I2P) can now reuse the HTTP fetcher's atomic writes, sha256
+  verification, progress, retries, and timeouts instead of shelling out to
+  `curl`. An invalid proxy URL fails the fetch rather than silently going direct.
+
 ## [0.3.0] - 2026-10-10
 
 ### Added

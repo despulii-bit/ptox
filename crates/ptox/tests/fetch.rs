@@ -2,7 +2,7 @@
 
 use ptox::{
     sha256_file, sha256_hex, Address, CommandFetcher, FetchError, FetchRegistry, HttpFetcher,
-    RetryPolicy,
+    ProxyConfig, RetryPolicy,
 };
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -1475,6 +1475,102 @@ async fn ipfs_gateway_reports_all_gateways_failed() {
 
     assert!(
         matches!(error, FetchError::AllFailed { count: 2, .. }),
+        "got {error:?}"
+    );
+    assert!(!dest.exists());
+}
+
+/// A one-shot HTTP proxy: records the request line and answers with `body`.
+async fn serve_proxy(body: &'static [u8]) -> (String, Arc<std::sync::Mutex<String>>) {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind");
+    let addr = listener.local_addr().expect("addr");
+    let seen = Arc::new(std::sync::Mutex::new(String::new()));
+    let recorded = seen.clone();
+    tokio::spawn(async move {
+        if let Ok((mut socket, _)) = listener.accept().await {
+            let mut buffer = [0u8; 4096];
+            let read = socket.read(&mut buffer).await.unwrap_or(0);
+            *recorded.lock().expect("lock") = String::from_utf8_lossy(&buffer[..read]).into_owned();
+            let header = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            );
+            let _ = socket.write_all(header.as_bytes()).await;
+            let _ = socket.write_all(body).await;
+            let _ = socket.flush().await;
+        }
+    });
+    (format!("http://{addr}"), seen)
+}
+
+#[tokio::test]
+async fn http_proxy_routes_the_request() {
+    let body: &'static [u8] = b"proxied payload";
+    let (proxy, seen) = serve_proxy(body).await;
+    let dest = temp_dest("proxy-http");
+    let mut registry = FetchRegistry::new();
+    registry.register(Arc::new(HttpFetcher::new().with_proxy(proxy)));
+
+    let fetched = registry
+        .fetch(
+            &Address::new("http", "http://example.invalid/file.bin"),
+            dest.clone(),
+            Some(sha256_hex(body)),
+        )
+        .await
+        .expect("fetch through the proxy");
+
+    assert_eq!(fetched.bytes, body.len() as u64);
+    let request = seen.lock().expect("lock").clone();
+    assert!(
+        request.starts_with("GET http://example.invalid/file.bin"),
+        "the proxy must receive an absolute-form request, got: {request}"
+    );
+    let _ = std::fs::remove_file(&dest);
+}
+
+#[tokio::test]
+async fn socks5_proxy_is_used_for_requests() {
+    // A live direct server: were the SOCKS proxy ignored, this fetch would
+    // succeed. With a dead proxy it must fail, proving the proxy is used.
+    let body: &'static [u8] = b"direct";
+    let url = serve_once(body).await;
+    let dest = temp_dest("proxy-socks");
+    let mut registry = FetchRegistry::new();
+    registry.register(Arc::new(
+        HttpFetcher::new().with_proxy("socks5h://127.0.0.1:1"),
+    ));
+
+    let error = registry
+        .fetch(&Address::new("http", url), dest.clone(), None)
+        .await
+        .expect_err("a dead SOCKS proxy must fail the fetch");
+
+    assert!(matches!(error, FetchError::Network(_)), "got {error:?}");
+    assert!(!dest.exists());
+}
+
+#[tokio::test]
+async fn invalid_proxy_url_fails_loudly() {
+    let dest = temp_dest("proxy-invalid");
+    let mut registry = FetchRegistry::new();
+    registry.register(Arc::new(
+        HttpFetcher::new().with_proxy(ProxyConfig::new("not a url")),
+    ));
+
+    let error = registry
+        .fetch(
+            &Address::new("http", "http://127.0.0.1:1/x"),
+            dest.clone(),
+            None,
+        )
+        .await
+        .expect_err("an invalid proxy URL must error, not silently go direct");
+
+    assert!(
+        format!("{error}").contains("invalid HTTP client configuration"),
         "got {error:?}"
     );
     assert!(!dest.exists());

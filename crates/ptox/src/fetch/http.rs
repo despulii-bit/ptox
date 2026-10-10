@@ -119,12 +119,75 @@ enum AttemptError {
     Permanent(FetchError),
 }
 
+impl From<FetchError> for AttemptError {
+    fn from(error: FetchError) -> Self {
+        // A client/configuration error (e.g. an invalid proxy) is not something
+        // a retry can fix.
+        AttemptError::Permanent(error)
+    }
+}
+
+/// A proxy to route HTTP requests through, for retrieval over overlay networks.
+///
+/// A thin wrapper over a proxy URL, accepted by [`HttpFetcher::with_proxy`]. The
+/// URL scheme selects the transport:
+///
+/// - `http://` / `https://` — an HTTP proxy (e.g. i2pd's HTTP proxy at
+///   `http://127.0.0.1:4444`);
+/// - `socks5://` — a SOCKS5 proxy (e.g. Tor's `SocksPort`), resolving the host
+///   locally;
+/// - `socks5h://` — SOCKS5 with **remote** DNS resolution, which overlay names
+///   (`.onion`, `.i2p`) require.
+///
+/// Requests made by an [`HttpFetcher`] configured with a proxy are sent *through*
+/// it, so register such a fetcher only for the overlay scheme (a `socks5h://`
+/// fetcher for `tor`, an `http://` fetcher for `i2p`) rather than for the shared
+/// `http`/`https` registry entry.
+///
+/// ```
+/// use ptox::ProxyConfig;
+///
+/// let tor = ProxyConfig::new("socks5h://127.0.0.1:9050");
+/// assert_eq!(tor.url(), "socks5h://127.0.0.1:9050");
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProxyConfig {
+    url: String,
+}
+
+impl ProxyConfig {
+    /// A proxy URL. The scheme picks the transport (`http`, `https`, `socks5`,
+    /// or `socks5h`).
+    pub fn new(url: impl Into<String>) -> Self {
+        Self { url: url.into() }
+    }
+
+    /// The proxy URL.
+    pub fn url(&self) -> &str {
+        &self.url
+    }
+}
+
+impl From<&str> for ProxyConfig {
+    fn from(url: &str) -> Self {
+        Self::new(url)
+    }
+}
+
+impl From<String> for ProxyConfig {
+    fn from(url: String) -> Self {
+        Self::new(url)
+    }
+}
+
 /// Fetches `http`/`https` URLs. Writes atomically and verifies sha256.
 pub struct HttpFetcher {
     client: reqwest::Client,
+    client_error: Option<String>,
     user_agent: Option<String>,
     connect_timeout: Option<Duration>,
     read_timeout: Option<Duration>,
+    proxy: Option<ProxyConfig>,
     schemes: Vec<String>,
     retry: RetryPolicy,
     resume: bool,
@@ -143,13 +206,15 @@ impl HttpFetcher {
         Self::with_user_agent(DEFAULT_USER_AGENT)
     }
 
-    /// Build the underlying client from the current options, falling back to a
-    /// default client if reqwest rejects the configuration.
+    /// Build the underlying client from the current options. Returns an error
+    /// (rather than silently dropping the proxy) if reqwest rejects the
+    /// configuration, so a misconfigured proxy never leaks traffic direct.
     fn build_client(
         user_agent: Option<&str>,
         connect_timeout: Option<Duration>,
         read_timeout: Option<Duration>,
-    ) -> reqwest::Client {
+        proxy: Option<&ProxyConfig>,
+    ) -> Result<reqwest::Client, reqwest::Error> {
         let mut builder = reqwest::Client::builder();
         if let Some(user_agent) = user_agent {
             builder = builder.user_agent(user_agent);
@@ -160,20 +225,74 @@ impl HttpFetcher {
         if let Some(timeout) = read_timeout {
             builder = builder.read_timeout(timeout);
         }
-        builder.build().unwrap_or_else(|_| reqwest::Client::new())
+        if let Some(proxy) = proxy {
+            builder = builder.proxy(reqwest::Proxy::all(proxy.url())?);
+        }
+        builder.build()
     }
 
-    /// Override the `User-Agent` sent with requests.
-    pub fn with_user_agent(user_agent: &str) -> Self {
+    /// Assemble a fetcher from explicit options, recording any client build
+    /// error so the first fetch reports it instead of silently ignoring it.
+    fn configured(
+        user_agent: Option<String>,
+        connect_timeout: Option<Duration>,
+        read_timeout: Option<Duration>,
+        proxy: Option<ProxyConfig>,
+    ) -> Self {
+        let (client, client_error) = match Self::build_client(
+            user_agent.as_deref(),
+            connect_timeout,
+            read_timeout,
+            proxy.as_ref(),
+        ) {
+            Ok(client) => (client, None),
+            Err(error) => (reqwest::Client::new(), Some(error.to_string())),
+        };
         Self {
-            client: Self::build_client(Some(user_agent), None, None),
-            user_agent: Some(user_agent.to_owned()),
-            connect_timeout: None,
-            read_timeout: None,
+            client,
+            client_error,
+            user_agent,
+            connect_timeout,
+            read_timeout,
+            proxy,
             schemes: vec!["http".to_owned(), "https".to_owned()],
             retry: RetryPolicy::default(),
             resume: false,
         }
+    }
+
+    /// Rebuild the client after an option change.
+    fn rebuild_client(&mut self) {
+        match Self::build_client(
+            self.user_agent.as_deref(),
+            self.connect_timeout,
+            self.read_timeout,
+            self.proxy.as_ref(),
+        ) {
+            Ok(client) => {
+                self.client = client;
+                self.client_error = None;
+            }
+            Err(error) => {
+                self.client = reqwest::Client::new();
+                self.client_error = Some(error.to_string());
+            }
+        }
+    }
+
+    /// The client, or the recorded build error (e.g. an invalid proxy URL).
+    fn client(&self) -> Result<&reqwest::Client, FetchError> {
+        match &self.client_error {
+            Some(error) => Err(FetchError::Network(format!(
+                "invalid HTTP client configuration: {error}"
+            ))),
+            None => Ok(&self.client),
+        }
+    }
+
+    /// Override the `User-Agent` sent with requests.
+    pub fn with_user_agent(user_agent: &str) -> Self {
+        Self::configured(Some(user_agent.to_owned()), None, None, None)
     }
 
     /// Bound how long the client waits to establish a connection.
@@ -191,11 +310,7 @@ impl HttpFetcher {
     /// ```
     pub fn with_connect_timeout(mut self, timeout: Duration) -> Self {
         self.connect_timeout = Some(timeout);
-        self.client = Self::build_client(
-            self.user_agent.as_deref(),
-            self.connect_timeout,
-            self.read_timeout,
-        );
+        self.rebuild_client();
         self
     }
 
@@ -214,11 +329,7 @@ impl HttpFetcher {
     /// ```
     pub fn with_read_timeout(mut self, timeout: Duration) -> Self {
         self.read_timeout = Some(timeout);
-        self.client = Self::build_client(
-            self.user_agent.as_deref(),
-            self.connect_timeout,
-            self.read_timeout,
-        );
+        self.rebuild_client();
         self
     }
 
@@ -230,6 +341,30 @@ impl HttpFetcher {
     /// The configured read timeout, if any.
     pub fn read_timeout(&self) -> Option<Duration> {
         self.read_timeout
+    }
+
+    /// Route every request through `proxy`.
+    ///
+    /// Use `socks5h://` for overlay names (`.onion`, `.i2p`) so the proxy resolves
+    /// the host, and `http://` for an HTTP proxy such as i2pd's. Register such a
+    /// fetcher under the *overlay* scheme only, leaving the shared `http`/`https`
+    /// entry unproxied.
+    ///
+    /// ```
+    /// use ptox::HttpFetcher;
+    ///
+    /// let fetcher = HttpFetcher::new().with_proxy("socks5h://127.0.0.1:9050");
+    /// assert_eq!(fetcher.proxy().map(|p| p.url()), Some("socks5h://127.0.0.1:9050"));
+    /// ```
+    pub fn with_proxy(mut self, proxy: impl Into<ProxyConfig>) -> Self {
+        self.proxy = Some(proxy.into());
+        self.rebuild_client();
+        self
+    }
+
+    /// The configured proxy, if any.
+    pub fn proxy(&self) -> Option<&ProxyConfig> {
+        self.proxy.as_ref()
     }
 
     /// Opt in to retrying transient failures with `policy`.
@@ -406,7 +541,7 @@ impl HttpFetcher {
                 .map_err(|error| AttemptError::Permanent(FetchError::Io(error)))?;
         }
 
-        let mut builder = self.client.get(&request.address.uri);
+        let mut builder = self.client()?.get(&request.address.uri);
         if resume_from > 0 {
             builder = builder.header(reqwest::header::RANGE, format!("bytes={resume_from}-"));
         }

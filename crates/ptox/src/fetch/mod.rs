@@ -26,7 +26,7 @@ mod ipfs;
 pub use command::CommandFetcher;
 #[cfg(feature = "file")]
 pub use file::FileFetcher;
-pub use http::{HttpFetcher, RetryPolicy};
+pub use http::{HttpFetcher, ProxyConfig, RetryPolicy};
 #[cfg(feature = "ipfs")]
 pub use ipfs::{IpfsGatewayFetcher, DEFAULT_IPFS_GATEWAY};
 

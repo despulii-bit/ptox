@@ -451,6 +451,36 @@ A total deadline (covering the whole body) is intentionally not exposed: it
 would cut off large downloads. A caller that needs one can wrap the fetch in
 `tokio::time::timeout`.
 
+## Proxies and overlay networks (`i2p`, `tor`, …)
+
+Overlay networks do not expose content at a URL you can dial directly; you reach
+them through a local proxy. Give an [`HttpFetcher`] a [`ProxyConfig`] and every
+request goes through it, reusing all the machinery above — atomic writes, sha256
+verification, progress, retries, timeouts — instead of shelling out to `curl`:
+
+```rust
+use ptox::{HttpFetcher, ProxyConfig};
+
+// Tor: SOCKS5 with remote DNS, so `.onion` names resolve at the proxy.
+let tor = HttpFetcher::new().with_proxy(ProxyConfig::new("socks5h://127.0.0.1:9050"));
+
+// I2P: i2pd's HTTP proxy.
+let i2p = HttpFetcher::new().with_proxy(ProxyConfig::new("http://127.0.0.1:4444"));
+# let _ = (tor, i2p);
+```
+
+`with_proxy` configures the *transport*. To expose it under an overlay scheme you
+wrap it in a small [`Fetcher`] whose `schemes()` is `["tor"]` / `["i2p"]` and
+whose `fetch` rewrites `tor://<host>/…` to `http://<host>/…` before delegating —
+exactly the shape of [`IpfsGatewayFetcher`]. Register that wrapper for the overlay
+scheme and leave the shared `http`/`https` entry **unproxied**, so clearnet stays
+direct.
+
+Supported proxy schemes: `http://` / `https://` (HTTP proxy), `socks5://`
+(SOCKS5, local DNS), and `socks5h://` (SOCKS5 with remote DNS — required for
+overlay names). An invalid proxy URL fails the fetch with `FetchError::Network`
+rather than silently going direct.
+
 ## Writing your own fetcher
 
 Implement `Fetcher` for a new protocol and register it. Keep the same
