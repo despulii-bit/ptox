@@ -23,7 +23,9 @@ for result in &report.results {
 ```
 
 Retrieval (the `fetch` feature, on by default) turns a result's `Address` into
-bytes: `Engine::fetch(&result, "out.bin").await`.
+bytes: `Engine::fetch(&result, "out.bin").await`. The `ipfs` feature (also on by
+default) adds an `ipfs://` gateway fetcher, `IpfsGatewayFetcher`, which resolves
+CIDs through a configurable HTTP gateway and delegates to the HTTP fetcher.
 
 Providers (network plugins) and clients (frontends) are separate software. The
 contract, JSON Schema, and conformance suite live in the repository:

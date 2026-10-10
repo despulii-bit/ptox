@@ -28,9 +28,11 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 sha2 = { version = "0.10", optional = true }
 
 [features]
-default = ["fetch"]
+default = ["fetch", "ipfs"]
 # Retrieval fabric (`Fetcher`, `FetchRegistry`, HTTP/command fetchers).
 fetch = ["dep:hex", "dep:reqwest", "dep:sha2"]
+# `ipfs://` retrieval through a configurable HTTP gateway (implies `fetch`).
+ipfs = ["fetch"]
 
 [dev-dependencies]
 async-stream = "0.3"

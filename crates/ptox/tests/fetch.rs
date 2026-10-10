@@ -275,3 +275,125 @@ async fn sha256_file_streams_and_matches_in_memory_hash() {
     assert_eq!(digest, sha256_hex(&body));
     let _ = std::fs::remove_file(&path);
 }
+
+#[cfg(feature = "ipfs")]
+use ptox::IpfsGatewayFetcher;
+
+/// A stub HTTP gateway that accepts one request, records its path, and answers
+/// with `body`.
+#[cfg(feature = "ipfs")]
+async fn serve_gateway(
+    body: &'static [u8],
+) -> (String, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind");
+    let addr = listener.local_addr().expect("addr");
+    let paths = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let recorded = paths.clone();
+    tokio::spawn(async move {
+        if let Ok((mut socket, _)) = listener.accept().await {
+            let mut buffer = [0u8; 2048];
+            let read = socket.read(&mut buffer).await.unwrap_or(0);
+            let request = String::from_utf8_lossy(&buffer[..read]);
+            let path = request
+                .lines()
+                .next()
+                .and_then(|line| line.split_whitespace().nth(1))
+                .unwrap_or_default()
+                .to_owned();
+            recorded.lock().expect("lock").push(path);
+            let header = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            );
+            let _ = socket.write_all(header.as_bytes()).await;
+            let _ = socket.write_all(body).await;
+            let _ = socket.flush().await;
+        }
+    });
+    (format!("http://{addr}"), paths)
+}
+
+#[cfg(feature = "ipfs")]
+#[tokio::test]
+async fn ipfs_gateway_rewrites_uri_and_fetches() {
+    let body: &'static [u8] = b"ipfs payload";
+    let (gateway, paths) = serve_gateway(body).await;
+    let dest = temp_dest("ipfs");
+    let mut registry = FetchRegistry::new();
+    registry.register(Arc::new(IpfsGatewayFetcher::new(gateway)));
+
+    let fetched = registry
+        .fetch(
+            &Address::new("ipfs", "ipfs://bafyabc/docs/report.pdf"),
+            dest.clone(),
+            Some(sha256_hex(body)),
+        )
+        .await
+        .expect("fetch");
+
+    assert_eq!(fetched.bytes, body.len() as u64);
+    assert_eq!(std::fs::read(&dest).expect("read"), body);
+    let recorded = paths.lock().expect("lock").clone();
+    assert_eq!(recorded.len(), 1, "one gateway request expected");
+    assert_eq!(recorded[0], "/ipfs/bafyabc/docs/report.pdf");
+    let _ = std::fs::remove_file(&dest);
+}
+
+#[cfg(feature = "ipfs")]
+#[tokio::test]
+async fn ipfs_gateway_reports_progress_through_delegation() {
+    let body: &'static [u8] = b"ipfs progress payload";
+    let (gateway, _paths) = serve_gateway(body).await;
+    let dest = temp_dest("ipfs-progress");
+    let mut registry = FetchRegistry::new();
+    registry.register(Arc::new(IpfsGatewayFetcher::new(gateway)));
+    let seen = std::sync::Mutex::new(Vec::new());
+
+    let fetched = registry
+        .fetch_with_progress(
+            &Address::new("ipfs", "ipfs://bafyprogress"),
+            dest.clone(),
+            None,
+            &|bytes: u64| seen.lock().expect("lock").push(bytes),
+        )
+        .await
+        .expect("fetch");
+
+    assert_eq!(fetched.bytes, body.len() as u64);
+    assert_eq!(
+        *seen.into_inner().expect("lock").last().expect("last"),
+        body.len() as u64
+    );
+    let _ = std::fs::remove_file(&dest);
+}
+
+#[cfg(feature = "ipfs")]
+#[tokio::test]
+async fn ipfs_gateway_rejects_a_uri_without_a_cid() {
+    let dest = temp_dest("ipfs-empty");
+    let mut registry = FetchRegistry::new();
+    registry.register(Arc::new(IpfsGatewayFetcher::new("http://127.0.0.1:1")));
+
+    let error = registry
+        .fetch(&Address::new("ipfs", "ipfs://"), dest.clone(), None)
+        .await
+        .expect_err("a cid-less ipfs URI must fail");
+
+    assert!(
+        matches!(error, FetchError::InvalidAddress(_)),
+        "got {error:?}"
+    );
+    assert!(!dest.exists());
+}
+
+#[cfg(feature = "ipfs")]
+#[tokio::test]
+async fn defaults_resolve_ipfs_when_the_feature_is_on() {
+    let registry = FetchRegistry::with_defaults();
+    assert!(
+        registry.fetcher_for("ipfs").is_some(),
+        "with_defaults must include the ipfs gateway fetcher"
+    );
+}

@@ -18,9 +18,13 @@
 
 mod command;
 mod http;
+#[cfg(feature = "ipfs")]
+mod ipfs;
 
 pub use command::CommandFetcher;
 pub use http::HttpFetcher;
+#[cfg(feature = "ipfs")]
+pub use ipfs::{IpfsGatewayFetcher, DEFAULT_IPFS_GATEWAY};
 
 use crate::merge::MergedResult;
 use crate::types::Address;
@@ -56,6 +60,10 @@ pub enum FetchError {
     /// The result carried no address to fetch.
     #[error("result has no address")]
     NoAddress,
+    /// The address was malformed for its scheme (e.g. an `ipfs://` URI with no
+    /// content identifier).
+    #[error("invalid address: {0}")]
+    InvalidAddress(String),
 }
 
 /// A single retrieval job: one address, one destination path.
@@ -125,10 +133,17 @@ impl FetchRegistry {
         Self::default()
     }
 
-    /// Registry with the built-in `http`/`https` fetcher.
+    /// Registry with the built-in fetchers: `http`/`https`, plus an `ipfs`
+    /// gateway fetcher when the `ipfs` feature is enabled.
+    ///
+    /// The IPFS gateway is `DEFAULT_IPFS_GATEWAY` (an `IpfsGatewayFetcher`);
+    /// build the registry yourself with `IpfsGatewayFetcher::new` to choose a
+    /// different gateway.
     pub fn with_defaults() -> Self {
         let mut registry = Self::new();
         registry.register(Arc::new(HttpFetcher::new()));
+        #[cfg(feature = "ipfs")]
+        registry.register(Arc::new(IpfsGatewayFetcher::with_default_gateway()));
         registry
     }
 

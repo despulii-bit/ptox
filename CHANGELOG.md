@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `fetch`: an `ipfs://` gateway fetcher. `IpfsGatewayFetcher` rewrites
+  `ipfs://<cid>[/path]` onto a configurable HTTP gateway (`<gateway>/ipfs/...`)
+  and delegates to `HttpFetcher`, so IPFS joins `http`/`https` as a scheme the
+  SDK can retrieve out of the box—with the same atomic writes, hash
+  verification, and progress reporting. `DEFAULT_IPFS_GATEWAY` is a public
+  convenience; production clients should pass their own gateway. Behind the new
+  `ipfs` feature (on by default), and registered by `FetchRegistry::with_defaults`
+  when enabled.
 - `fetch`: optional progress reporting. `Fetcher::fetch_with_progress`,
   `FetchRegistry::fetch_with_progress` / `fetch_merged_with_progress`, and
   `Engine::fetch_with_progress` report the cumulative number of retrieved bytes

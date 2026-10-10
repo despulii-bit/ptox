@@ -38,13 +38,14 @@ repo per shared component — add a crate here.
   - `ptox::types` — data contracts (`FileQuery`, `FileResult`, `Address`, …).
   - `ptox::search` — the `SearchProvider` contract, `Capabilities`, and the fan-out engine.
   - `ptox::provider` — the NDJSON wire format and `SubprocessProvider`.
-  - `ptox::fetch` — the `Fetcher` contract and retrieval (feature `fetch`).
+  - `ptox::fetch` — the `Fetcher` contract and retrieval (feature `fetch`),
+    including an HTTP gateway fetcher for `ipfs://` (feature `ipfs`).
   - `ptox::merge` — deduplicate + rank results from many providers.
 - `crates/ptox-conformance` — provider conformance suite (library + CLI).
 
-A client depends on `ptox`. Retrieval (the `fetch` feature) is on by default;
-disable default features for a search-only build. A provider author uses
-`ptox::types` + `ptox::search` and tests with `ptox-conformance`.
+A client depends on `ptox`. Retrieval (`fetch` and the `ipfs` gateway) is on by
+default; disable default features for a search-only build. A provider author
+uses `ptox::types` + `ptox::search` and tests with `ptox-conformance`.
 
 ## Development
 
@@ -86,7 +87,7 @@ Private, pre-release. Contract **v2** locked (with a JSON Schema). The SDK is a
 single `ptox` crate with `types` / `search` / `provider` / `fetch` modules (fetch
 behind a feature); the conformance suite is the `ptox-conformance` crate.
 Providers, clients, ranking policy, and indexing are separate; the SDK supplies a
-default merge/rank. 61 tests green.
+default merge/rank. 70 tests green.
 
 ## Contributing
 
