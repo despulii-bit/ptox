@@ -29,6 +29,11 @@ for metric in &report.metrics {
 time (no query or result content); `fanout_with_metrics` exposes the same
 `ptox::Metrics` collector to clients that drive providers directly.
 
+`FileQuery` selectors can be built fluently: `FileQuery::new("annual report")
+.with_mimetype("application/pdf").with_extension(".pdf")
+.with_size_range(0, 10_000_000).with_limit(20)`. The extension helpers normalize
+case and leading dots; empty collections clear their field.
+
 Retrieval (the `fetch` feature, on by default) turns a result's `Address` into
 bytes: `Engine::fetch(&result, "out.bin").await`. The `ipfs` feature (also on by
 default) adds an `ipfs://` gateway fetcher, `IpfsGatewayFetcher`, which resolves

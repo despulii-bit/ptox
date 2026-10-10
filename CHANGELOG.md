@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `FileQuery` builder methods. `FileQuery::new(text)` can now be chained with
+  `with_hashes` / `with_hash`, `with_mimetypes` / `with_mimetype`,
+  `with_extensions` / `with_extension`, `with_filename`, `with_size_range` /
+  `with_size_min` / `with_size_max`, `with_published_after` /
+  `with_published_before`, `with_lang`, `with_limit`, and `with_extras` /
+  `with_extra`. Singular methods append; plurals replace; empty collections clear
+  the field. Extension helpers normalize to the contract's lowercased, dotless
+  form (`.PDF` → `pdf`), so clients no longer have to reimplement selector
+  plumbing.
+
 - Per-provider search metrics. `Engine::search` now returns `SearchReport::metrics`
   — a `ProviderMetric` per provider with its result count, failure count, and
   elapsed time. A new `fanout_with_metrics` fills a shared `ptox::Metrics`
