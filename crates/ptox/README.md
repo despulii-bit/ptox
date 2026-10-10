@@ -26,6 +26,8 @@ Retrieval (the `fetch` feature, on by default) turns a result's `Address` into
 bytes: `Engine::fetch(&result, "out.bin").await`. The `ipfs` feature (also on by
 default) adds an `ipfs://` gateway fetcher, `IpfsGatewayFetcher`, which resolves
 CIDs through a configurable HTTP gateway and delegates to the HTTP fetcher.
+`HttpFetcher::with_retry` can replay transient GET failures (`5xx`, `408`, `429`,
+connection/stream errors) with exponential backoff; retries are off by default.
 
 Providers (network plugins) and clients (frontends) are separate software. The
 contract, JSON Schema, and conformance suite live in the repository:

@@ -22,7 +22,7 @@ mod http;
 mod ipfs;
 
 pub use command::CommandFetcher;
-pub use http::HttpFetcher;
+pub use http::{HttpFetcher, RetryPolicy};
 #[cfg(feature = "ipfs")]
 pub use ipfs::{IpfsGatewayFetcher, DEFAULT_IPFS_GATEWAY};
 

@@ -1,8 +1,13 @@
 #![cfg(feature = "fetch")]
 
-use ptox::{sha256_file, sha256_hex, Address, CommandFetcher, FetchError, FetchRegistry};
+use ptox::{
+    sha256_file, sha256_hex, Address, CommandFetcher, FetchError, FetchRegistry, HttpFetcher,
+    RetryPolicy,
+};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 async fn serve_once(body: &'static [u8]) -> String {
@@ -44,6 +49,71 @@ async fn serve_truncated() -> String {
         }
     });
     format!("http://{addr}/file")
+}
+
+/// One canned reply for [`serve_script`].
+enum Reply {
+    /// A non-2xx status with an empty body.
+    Status(u16),
+    /// A complete 200 response with this body.
+    Body(&'static [u8]),
+    /// A 200 response that promises 1024 bytes but sends 5 (mid-stream error).
+    Truncated,
+}
+
+/// Serve one reply per accepted connection, in order, and count the connections
+/// actually accepted. Lets a test drive a flaky endpoint deterministically.
+async fn serve_script(replies: Vec<Reply>) -> (String, Arc<AtomicUsize>) {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind");
+    let addr = listener.local_addr().expect("addr");
+    let hits = Arc::new(AtomicUsize::new(0));
+    let counted = hits.clone();
+    tokio::spawn(async move {
+        for reply in replies {
+            let Ok((mut socket, _)) = listener.accept().await else {
+                break;
+            };
+            counted.fetch_add(1, Ordering::SeqCst);
+            let mut buffer = [0u8; 2048];
+            let _ = socket.read(&mut buffer).await;
+            match reply {
+                Reply::Status(code) => {
+                    let response = format!(
+                        "HTTP/1.1 {code} X\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                    );
+                    let _ = socket.write_all(response.as_bytes()).await;
+                }
+                Reply::Body(body) => {
+                    let header = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        body.len()
+                    );
+                    let _ = socket.write_all(header.as_bytes()).await;
+                    let _ = socket.write_all(body).await;
+                }
+                Reply::Truncated => {
+                    let header =
+                        "HTTP/1.1 200 OK\r\nContent-Length: 1024\r\nConnection: close\r\n\r\n";
+                    let _ = socket.write_all(header.as_bytes()).await;
+                    let _ = socket.write_all(b"short").await;
+                }
+            }
+            let _ = socket.flush().await;
+        }
+    });
+    (format!("http://{addr}/file"), hits)
+}
+
+/// An `HttpFetcher` registry with bounded retries and no sleeping, so retry
+/// tests stay fast but exercise the real loop.
+fn retrying_registry(attempts: u32) -> FetchRegistry {
+    let mut registry = FetchRegistry::new();
+    registry.register(Arc::new(
+        HttpFetcher::new().with_retry(RetryPolicy::new(attempts).with_base_delay(Duration::ZERO)),
+    ));
+    registry
 }
 
 fn temp_dest(tag: &str) -> PathBuf {
@@ -168,6 +238,118 @@ async fn http_stream_error_removes_the_partial_file() {
         dest.file_name().expect("name").to_string_lossy()
     ));
     assert!(!part.exists(), "partial file must be removed on failure");
+}
+
+#[tokio::test]
+async fn http_retry_is_off_by_default() {
+    let body: &'static [u8] = b"unused";
+    let (url, hits) = serve_script(vec![Reply::Status(503), Reply::Body(body)]).await;
+    let dest = temp_dest("no-retry-default");
+    let registry = FetchRegistry::with_defaults();
+
+    let error = registry
+        .fetch(&Address::new("http", url), dest.clone(), None)
+        .await
+        .expect_err("a 503 must fail without retries");
+
+    assert!(matches!(error, FetchError::Network(_)), "got {error:?}");
+    assert_eq!(hits.load(Ordering::SeqCst), 1, "default must not retry");
+    assert!(!dest.exists());
+}
+
+#[tokio::test]
+async fn http_retries_transient_status_then_succeeds() {
+    let body: &'static [u8] = b"recovered payload";
+    let (url, hits) = serve_script(vec![
+        Reply::Status(503),
+        Reply::Status(429),
+        Reply::Body(body),
+    ])
+    .await;
+    let dest = temp_dest("retry-success");
+    let registry = retrying_registry(3);
+
+    let fetched = registry
+        .fetch(
+            &Address::new("http", url),
+            dest.clone(),
+            Some(sha256_hex(body)),
+        )
+        .await
+        .expect("third attempt succeeds");
+
+    assert_eq!(fetched.bytes, body.len() as u64);
+    assert_eq!(std::fs::read(&dest).expect("read"), body);
+    assert_eq!(
+        hits.load(Ordering::SeqCst),
+        3,
+        "two retries after the first failure"
+    );
+    let _ = std::fs::remove_file(&dest);
+}
+
+#[tokio::test]
+async fn http_retry_exhaustion_reports_the_last_error() {
+    let (url, hits) = serve_script(vec![
+        Reply::Status(503),
+        Reply::Status(503),
+        Reply::Status(503),
+    ])
+    .await;
+    let dest = temp_dest("retry-exhausted");
+    let registry = retrying_registry(3);
+
+    let error = registry
+        .fetch(&Address::new("http", url), dest.clone(), None)
+        .await
+        .expect_err("every attempt fails");
+
+    assert!(matches!(error, FetchError::Network(_)), "got {error:?}");
+    assert_eq!(
+        hits.load(Ordering::SeqCst),
+        3,
+        "exactly max_attempts requests"
+    );
+    assert!(!dest.exists());
+}
+
+#[tokio::test]
+async fn http_does_not_retry_permanent_client_errors() {
+    let body: &'static [u8] = b"unused";
+    let (url, hits) = serve_script(vec![Reply::Status(404), Reply::Body(body)]).await;
+    let dest = temp_dest("no-retry-404");
+    let registry = retrying_registry(3);
+
+    let error = registry
+        .fetch(&Address::new("http", url), dest.clone(), None)
+        .await
+        .expect_err("404 is permanent");
+
+    assert!(matches!(error, FetchError::Network(_)), "got {error:?}");
+    assert_eq!(hits.load(Ordering::SeqCst), 1, "4xx must not be retried");
+    assert!(!dest.exists());
+}
+
+#[tokio::test]
+async fn http_retry_resets_a_partial_download() {
+    let body: &'static [u8] = b"complete body after reset";
+    let (url, hits) = serve_script(vec![Reply::Truncated, Reply::Body(body)]).await;
+    let dest = temp_dest("retry-partial");
+    let registry = retrying_registry(2);
+
+    let fetched = registry
+        .fetch(
+            &Address::new("http", url),
+            dest.clone(),
+            Some(sha256_hex(body)),
+        )
+        .await
+        .expect("retry after a truncated first attempt");
+
+    assert_eq!(fetched.bytes, body.len() as u64);
+    assert_eq!(std::fs::read(&dest).expect("read"), body);
+    assert_eq!(hits.load(Ordering::SeqCst), 2);
+    let _ = std::fs::remove_file(&dest);
 }
 
 #[tokio::test]

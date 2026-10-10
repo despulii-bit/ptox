@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `fetch`: an optional HTTP retry policy. `HttpFetcher::with_retry` takes a
+  `RetryPolicy` (off by default) that replays idempotent GETs after transient
+  failures — connection errors, mid-stream read errors, and `408`/`429`/`5xx`
+  responses — with exponential backoff (`base_delay * 2^(n-1)`, capped by
+  `max_delay`). Client errors (`4xx`) and hash mismatches are never retried.
+  Every attempt restarts from a clean `.part` file, and progress stays monotonic
+  across retries.
 - `fetch`: multi-address failover. `FetchRegistry::fetch_merged` and
   `Engine::fetch` now try every address of a `MergedResult` in preference order
   (`https` > `http` > `ipfs` > `magnet` > other) until one succeeds, so a dead
