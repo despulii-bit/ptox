@@ -2,6 +2,7 @@ use super::provider::SearchProvider;
 use crate::types::{ErrorCode, ErrorInfo, Failure, FileQuery, Outcome, Validate};
 use async_stream::stream;
 use futures::{Stream, StreamExt};
+use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, Semaphore};
@@ -11,6 +12,15 @@ use tokio::sync::{mpsc, Semaphore};
 pub struct Options {
     /// Total time budget per provider. Exceeding it yields a `timeout` failure.
     pub timeout: Option<Duration>,
+    /// Total wall-clock budget for the whole fan-out, measured from when the
+    /// stream is first polled.
+    ///
+    /// When it elapses, the stream stops and every provider still running (or
+    /// not yet started) is reported as a single `timeout` failure, so a caller
+    /// keeps the partial results already delivered instead of waiting for the
+    /// sum of each provider's [`timeout`](Self::timeout). `None` (the default)
+    /// means no overall budget.
+    pub deadline: Option<Duration>,
     /// Global cap on the number of `Outcome::Result` items streamed.
     pub limit: Option<usize>,
     /// Global number of `Outcome::Result` items to skip before streaming, the
@@ -140,12 +150,16 @@ pub fn fanout_with_metrics(
             .max(1);
         let semaphore = Arc::new(Semaphore::new(concurrency));
 
+        let names: Vec<String> = providers.iter().map(|p| p.name().to_owned()).collect();
+        let finished: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
+
         for provider in providers {
             let tx = tx.clone();
             let query = query.clone();
             let timeout = options.timeout;
             let semaphore = semaphore.clone();
             let metrics = metrics.clone();
+            let finished = finished.clone();
 
             tokio::spawn(async move {
                 let start = Instant::now();
@@ -223,20 +237,39 @@ pub fn fanout_with_metrics(
                 }
 
                 metrics.record(ProviderMetric {
-                    provider: name,
+                    provider: name.clone(),
                     results: result_count,
                     failures: failure_count,
                     elapsed: start.elapsed(),
                 });
+                if let Ok(mut finished) = finished.lock() {
+                    finished.insert(name);
+                }
             });
         }
 
         drop(tx);
 
+        let deadline = options
+            .deadline
+            .map(|after| tokio::time::Instant::now() + after);
         let mut yielded = 0usize;
         let mut skipped = 0usize;
         let offset = options.offset.unwrap_or(0);
-        while let Some(outcome) = rx.recv().await {
+        let mut hit_deadline = false;
+        loop {
+            let next = match deadline {
+                Some(at) => tokio::time::timeout_at(at, rx.recv()).await,
+                None => Ok::<_, tokio::time::error::Elapsed>(rx.recv().await),
+            };
+            let outcome = match next {
+                Ok(Some(outcome)) => outcome,
+                Ok(None) => break,
+                Err(_) => {
+                    hit_deadline = true;
+                    break;
+                }
+            };
             if matches!(outcome, Outcome::Result(_)) {
                 if skipped < offset {
                     skipped += 1;
@@ -248,6 +281,24 @@ pub fn fanout_with_metrics(
                 yielded += 1;
             }
             yield outcome;
+        }
+
+        if hit_deadline {
+            let done = finished.lock().map(|done| done.clone()).unwrap_or_default();
+            let budget = options.deadline.unwrap_or_default();
+            for name in names {
+                if !done.contains(&name) {
+                    yield Outcome::Failure(Failure {
+                        provider: name,
+                        error: ErrorInfo {
+                            code: ErrorCode::timeout(),
+                            message: format!(
+                                "search deadline of {budget:?} exceeded before the provider finished"
+                            ),
+                        },
+                    });
+                }
+            }
         }
     }
 }

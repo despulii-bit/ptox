@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `search`: `Options::deadline`, a whole-fan-out wall-clock budget. When it
+  elapses, the stream stops, keeps the partial results already delivered, and
+  reports every provider still running (or not yet started) as a single
+  `timeout` failure — so a client need not wait for the sum of each provider's
+  `Options::timeout`.
+- `config`: `${VAR}` / `$VAR` expansion in provider and fetch-command
+  `program`/`args` and in provider `env` values. `Config::load` expands using the
+  process environment; `Config::expand_env` / `expand_env_with` do it explicitly.
+  `$$` is a literal `$`; an unset variable is an error.
+- `fetch`: `IpfsGatewayFetcher::with_gateways` takes an ordered list of gateways
+  and fails over between them, reporting the winning gateway on
+  `Fetched::address`. `new` / `with_default_gateway` remain single-gateway.
+
 ## [0.2.0] - 2026-10-10
 
 ### Added

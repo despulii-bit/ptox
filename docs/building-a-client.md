@@ -104,9 +104,12 @@ let engine = Engine::new(providers)
     .with_weights(weights);
 ```
 
-`Options` is the client's policy knob set: `timeout` (per provider), `limit` and
-`offset` (global, over the streamed result sequence), and `concurrency` (max
-providers polled at once). Always set a `timeout` in an interactive client.
+`Options` is the client's policy knob set: `timeout` (per provider), `deadline`
+(a whole-fan-out wall-clock budget — when it elapses the stream stops, keeps the
+partial results already delivered, and reports every provider still running as a
+`timeout` failure), `limit` and `offset` (global, over the streamed result
+sequence), and `concurrency` (max providers polled at once). Always set a
+`timeout` in an interactive client; add a `deadline` to bound the whole search.
 
 If a provider's `capabilities()` is expensive and stable, `Engine::with_capability_cache()`
 asks each provider once; `Engine::invalidate_capabilities()` clears it.
@@ -324,7 +327,9 @@ let registry = config.fetch_registry();                // just the fetchers
 
 `Config::from_toml_str` / `to_toml_string` parse and write it (`config init`
 commands), `Config::validate()` reports problems, and the serialized shape is a
-stability contract. Full reference: [configuration.md](configuration.md).
+stability contract. `Config::load` also expands `${VAR}` / `$VAR` references from
+the environment, so one config is portable across machines. Full reference:
+[configuration.md](configuration.md).
 
 ## 12. Test a client offline
 

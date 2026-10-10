@@ -17,6 +17,26 @@ A runnable walkthrough is
 [`crates/ptox/examples/config.rs`](../crates/ptox/examples/config.rs); run it
 with `cargo run -p ptox --example config`.
 
+## Environment expansion
+
+`${VAR}` and `$VAR` references in provider `program` / `args` / `env` values and
+in fetch-command `program` / `args` are expanded by `Config::load` using the
+process environment, so one config can be shared across machines:
+
+```toml
+[[provider]]
+name = "local"
+program = "${PTOX_BIN}/provider"
+args = ["--data", "${PTOX_DATA}"]
+```
+
+`$$` is a literal `$`. A reference to an unset variable is an error
+(`ConfigError::MissingEnv`), as is a malformed reference such as an unclosed
+`${` (`ConfigError::InvalidEnvSyntax`). Environment-variable *keys* are not
+expanded. `Config::from_toml_str` parses literally; call `Config::expand_env`
+(or `Config::expand_env_with` for a custom environment) yourself when you embed a
+config string rather than reading a file.
+
 ## Example
 
 ```toml

@@ -1425,3 +1425,57 @@ fn defaults_report_their_schemes() {
     assert!(summary.starts_with("http (http, https)\n"), "{summary}");
     assert!(summary.contains("ipfs-gateway (ipfs)"), "{summary}");
 }
+
+#[cfg(feature = "ipfs")]
+#[tokio::test]
+async fn ipfs_gateway_fails_over_to_the_next_gateway() {
+    let body: &'static [u8] = b"ipfs payload";
+    let (gateway, paths) = serve_gateway(body).await;
+    let dest = temp_dest("ipfs-failover");
+    let mut registry = FetchRegistry::new();
+    registry.register(Arc::new(IpfsGatewayFetcher::with_gateways([
+        "http://127.0.0.1:1".to_owned(), // dead: connection refused
+        gateway.clone(),
+    ])));
+
+    let fetched = registry
+        .fetch(
+            &Address::new("ipfs", "ipfs://bafyfailover"),
+            dest.clone(),
+            Some(sha256_hex(body)),
+        )
+        .await
+        .expect("the second gateway should succeed");
+
+    assert_eq!(fetched.bytes, body.len() as u64);
+    // The winning gateway is reported on the fetched address.
+    assert_eq!(fetched.address.uri, format!("{gateway}/ipfs/bafyfailover"));
+    assert_eq!(fetched.address.scheme, "http");
+    assert_eq!(
+        paths.lock().expect("lock").clone(),
+        vec!["/ipfs/bafyfailover".to_owned()]
+    );
+    let _ = std::fs::remove_file(&dest);
+}
+
+#[cfg(feature = "ipfs")]
+#[tokio::test]
+async fn ipfs_gateway_reports_all_gateways_failed() {
+    let dest = temp_dest("ipfs-all-failed");
+    let mut registry = FetchRegistry::new();
+    registry.register(Arc::new(IpfsGatewayFetcher::with_gateways([
+        "http://127.0.0.1:1".to_owned(),
+        "http://127.0.0.1:2".to_owned(),
+    ])));
+
+    let error = registry
+        .fetch(&Address::new("ipfs", "ipfs://bafydead"), dest.clone(), None)
+        .await
+        .expect_err("every gateway is dead");
+
+    assert!(
+        matches!(error, FetchError::AllFailed { count: 2, .. }),
+        "got {error:?}"
+    );
+    assert!(!dest.exists());
+}

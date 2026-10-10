@@ -172,6 +172,20 @@ pub enum ConfigError {
     /// The config parsed but is semantically invalid.
     #[error("invalid config: {0}")]
     Invalid(String),
+    /// A `${VAR}` / `$VAR` reference named an environment variable that is not
+    /// set.
+    #[error("environment variable `{name}` is referenced but not set")]
+    MissingEnv {
+        /// The referenced variable name.
+        name: String,
+    },
+    /// A malformed environment reference (e.g. an unclosed `${` or an invalid
+    /// name).
+    #[error("malformed environment reference in `{value}`")]
+    InvalidEnvSyntax {
+        /// The value that contained the malformed reference.
+        value: String,
+    },
 }
 
 impl Default for Config {
@@ -198,20 +212,68 @@ impl Config {
         Ok(config)
     }
 
-    /// Read, parse, and validate the TOML config at `path`.
+    /// Read, parse, expand, and validate the TOML config at `path`.
+    ///
+    /// Environment references ([`Config::expand_env`]) are resolved here with
+    /// the process environment, so a config can be shared across machines with
+    /// `${HOME}`, `${DATA_DIR}`, and similar. Use [`Config::from_toml_str`] to
+    /// parse without touching the environment.
     pub fn load(path: impl AsRef<Path>) -> Result<Self, ConfigError> {
         let path = path.as_ref();
         let text = std::fs::read_to_string(path).map_err(|source| ConfigError::Read {
             path: path.to_path_buf(),
             source,
         })?;
-        Self::from_toml_str(&text)
+        let config = Self::from_toml_str(&text)?.expand_env()?;
+        config.validate()?;
+        Ok(config)
     }
 
     /// Serialize this config back to pretty TOML. Round-trips through
     /// [`Config::from_toml_str`].
     pub fn to_toml_string(&self) -> Result<String, ConfigError> {
         Ok(toml::to_string_pretty(self)?)
+    }
+
+    /// Expand `${VAR}` / `$VAR` references in provider and fetch-command
+    /// `program` / `args` and in provider `env` values, using the process
+    /// environment.
+    ///
+    /// `$VAR` and `${VAR}` both work (braces are unambiguous when the name is
+    /// followed by other text); `$$` is a literal `$`. A reference to an unset
+    /// variable is an error, as is a malformed reference (an unclosed `${` or a
+    /// name that is not `[A-Za-z_][A-Za-z0-9_]*`). Environment-variable *keys*
+    /// are not expanded.
+    ///
+    /// [`Config::load`] applies this automatically. [`Config::from_toml_str`]
+    /// parses literally, so call this yourself when you embed a config string.
+    pub fn expand_env(&self) -> Result<Config, ConfigError> {
+        self.expand_env_with(|name| std::env::var(name).ok())
+    }
+
+    /// Like [`Config::expand_env`], but resolve names with `lookup` instead of
+    /// the process environment (for tests or a custom environment).
+    pub fn expand_env_with<F>(&self, lookup: F) -> Result<Config, ConfigError>
+    where
+        F: Fn(&str) -> Option<String>,
+    {
+        let mut config = self.clone();
+        for provider in &mut config.providers {
+            provider.program = expand(&provider.program, &lookup)?;
+            for arg in &mut provider.args {
+                *arg = expand(arg, &lookup)?;
+            }
+            for value in provider.env.values_mut() {
+                *value = expand(value, &lookup)?;
+            }
+        }
+        for command in config.fetch.commands.values_mut() {
+            command.program = expand(&command.program, &lookup)?;
+            for arg in &mut command.args {
+                *arg = expand(arg, &lookup)?;
+            }
+        }
+        Ok(config)
     }
 
     /// Check the schema version and the semantics that TOML itself cannot
@@ -361,6 +423,76 @@ impl Config {
         registry.register(std::sync::Arc::new(crate::fetch::FileFetcher::new()));
         registry
     }
+}
+
+/// Expand `$VAR` / `${VAR}` references (and `$$` → `$`) in `value`, resolving
+/// names with `lookup`. See [`Config::expand_env`].
+fn expand(value: &str, lookup: &dyn Fn(&str) -> Option<String>) -> Result<String, ConfigError> {
+    if !value.contains('$') {
+        return Ok(value.to_owned());
+    }
+
+    let mut out = String::with_capacity(value.len());
+    let mut chars = value.chars().peekable();
+    while let Some(character) = chars.next() {
+        if character != '$' {
+            out.push(character);
+            continue;
+        }
+        match chars.peek().copied() {
+            Some('$') => {
+                chars.next();
+                out.push('$');
+            }
+            Some('{') => {
+                chars.next();
+                let mut name = String::new();
+                let mut closed = false;
+                for inner in chars.by_ref() {
+                    if inner == '}' {
+                        closed = true;
+                        break;
+                    }
+                    name.push(inner);
+                }
+                if !closed || !is_valid_env_name(&name) {
+                    return Err(ConfigError::InvalidEnvSyntax {
+                        value: value.to_owned(),
+                    });
+                }
+                out.push_str(&resolve(&name, lookup)?);
+            }
+            Some(start) if start.is_ascii_alphabetic() || start == '_' => {
+                let mut name = String::new();
+                while let Some(&next) = chars.peek() {
+                    if next.is_ascii_alphanumeric() || next == '_' {
+                        name.push(next);
+                        chars.next();
+                    } else {
+                        break;
+                    }
+                }
+                out.push_str(&resolve(&name, lookup)?);
+            }
+            _ => out.push('$'),
+        }
+    }
+    Ok(out)
+}
+
+fn resolve(name: &str, lookup: &dyn Fn(&str) -> Option<String>) -> Result<String, ConfigError> {
+    lookup(name).ok_or_else(|| ConfigError::MissingEnv {
+        name: name.to_owned(),
+    })
+}
+
+fn is_valid_env_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(first) if first.is_ascii_alphabetic() || first == '_' => {}
+        _ => return false,
+    }
+    chars.all(|character| character.is_ascii_alphanumeric() || character == '_')
 }
 
 #[cfg(test)]
@@ -523,5 +655,119 @@ args = ["-d", "{dir}", "{uri}"]
     fn engine_of_empty_config_has_no_providers() {
         let engine = Config::new().engine();
         assert!(engine.providers().is_empty());
+    }
+
+    fn provider_with(program: &str, args: Vec<&str>, env: BTreeMap<String, String>) -> Config {
+        Config {
+            version: CONFIG_VERSION,
+            providers: vec![ProviderConfig {
+                name: "p".to_owned(),
+                program: program.to_owned(),
+                args: args.into_iter().map(str::to_owned).collect(),
+                env,
+            }],
+            fetch: FetchConfig::default(),
+            ranking: RankingConfig::default(),
+        }
+    }
+
+    #[test]
+    fn expands_variables_in_program_args_and_env() {
+        let mut env = BTreeMap::new();
+        env.insert("API_TOKEN".to_owned(), "${TOKEN}".to_owned());
+        let config = provider_with("${BIN}", vec!["--dir=$DATA_DIR", "literal$$dollar"], env);
+
+        let expanded = config
+            .expand_env_with(|name| match name {
+                "BIN" => Some("/usr/bin/provider".to_owned()),
+                "DATA_DIR" => Some("/srv/data".to_owned()),
+                "TOKEN" => Some("s3cr3t".to_owned()),
+                _ => None,
+            })
+            .expect("expand");
+
+        let provider = &expanded.providers[0];
+        assert_eq!(provider.program, "/usr/bin/provider");
+        assert_eq!(provider.args, vec!["--dir=/srv/data", "literal$dollar"]);
+        assert_eq!(provider.env["API_TOKEN"], "s3cr3t");
+    }
+
+    #[test]
+    fn expands_fetch_command_program_and_args() {
+        let mut commands = BTreeMap::new();
+        commands.insert(
+            "magnet".to_owned(),
+            CommandConfig {
+                program: "${ARIA}".to_owned(),
+                args: vec!["-d".to_owned(), "${DIR}".to_owned(), "{uri}".to_owned()],
+            },
+        );
+        let config = Config {
+            version: CONFIG_VERSION,
+            providers: Vec::new(),
+            fetch: FetchConfig { commands },
+            ranking: RankingConfig::default(),
+        };
+
+        let expanded = config
+            .expand_env_with(|name| match name {
+                "ARIA" => Some("aria2c".to_owned()),
+                "DIR" => Some("/tmp".to_owned()),
+                _ => None,
+            })
+            .expect("expand");
+
+        let command = &expanded.fetch.commands["magnet"];
+        assert_eq!(command.program, "aria2c");
+        assert_eq!(command.args, vec!["-d", "/tmp", "{uri}"]);
+    }
+
+    #[test]
+    fn errors_on_a_missing_variable() {
+        let error = provider_with("$NOPE", vec![], BTreeMap::new())
+            .expand_env_with(|_| None)
+            .unwrap_err();
+        assert!(matches!(error, ConfigError::MissingEnv { name } if name == "NOPE"));
+    }
+
+    #[test]
+    fn rejects_malformed_environment_references() {
+        for bad in ["${UNCLOSED", "${1BAD}", "${}", "${BAD-NAME}"] {
+            let error = provider_with(bad, vec![], BTreeMap::new())
+                .expand_env_with(|_| Some("x".to_owned()))
+                .unwrap_err();
+            assert!(
+                matches!(error, ConfigError::InvalidEnvSyntax { .. }),
+                "{bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn treats_a_lone_dollar_as_literal() {
+        let expanded = provider_with("cost$5", vec![], BTreeMap::new())
+            .expand_env_with(|_| Some("x".to_owned()))
+            .expect("expand");
+        assert_eq!(expanded.providers[0].program, "cost$5");
+    }
+
+    #[test]
+    fn load_expands_the_process_environment() {
+        let var = format!("PTOX_CONFIG_TEST_{}", std::process::id());
+        std::env::set_var(&var, "/opt/bin");
+
+        let path =
+            std::env::temp_dir().join(format!("ptox-config-expand-{}.toml", std::process::id()));
+        std::fs::write(
+            &path,
+            format!("[[provider]]\nname = \"p\"\nprogram = \"${{{var}}}/provider\"\n"),
+        )
+        .expect("write temp config");
+
+        let config = Config::load(&path).expect("load");
+        assert_eq!(config.providers[0].program, "/opt/bin/provider");
+
+        let _ = std::fs::remove_file(&path);
+        std::env::remove_var(&var);
     }
 }

@@ -341,6 +341,89 @@ async fn fanout_attributes_anonymous_results() {
     assert_eq!(result.provider, "anon");
 }
 
+#[tokio::test]
+async fn overall_deadline_stops_and_reports_running_providers() {
+    let options = Options {
+        deadline: Some(Duration::from_millis(100)),
+        timeout: Some(Duration::from_secs(30)), // per-provider budget, deliberately large
+        ..Options::default()
+    };
+
+    let start = std::time::Instant::now();
+    let outcomes = collect(fanout(
+        query(),
+        providers(vec![
+            Mock::new("fast").with_results(2),
+            Mock::new("slow")
+                .with_delay(Duration::from_secs(30))
+                .with_results(1),
+        ]),
+        options,
+    ))
+    .await;
+
+    assert!(
+        start.elapsed() < Duration::from_secs(5),
+        "the overall deadline should stop the fan-out early"
+    );
+
+    // Partial results delivered before the deadline are kept.
+    assert_eq!(
+        outcomes.iter().filter(|o| o.as_result().is_some()).count(),
+        2
+    );
+
+    // The provider still running is reported once, as a timeout.
+    let slow: Vec<_> = outcomes
+        .iter()
+        .filter_map(|o| o.as_failure())
+        .filter(|failure| failure.provider == "slow")
+        .collect();
+    assert_eq!(slow.len(), 1);
+    assert_eq!(slow[0].error.code, ErrorCode::timeout());
+}
+
+#[tokio::test]
+async fn overall_deadline_does_not_report_finished_providers() {
+    let options = Options {
+        deadline: Some(Duration::from_secs(30)),
+        ..Options::default()
+    };
+    let outcomes = collect(fanout(
+        query(),
+        providers(vec![Mock::new("a").with_results(3)]),
+        options,
+    ))
+    .await;
+
+    assert_eq!(
+        outcomes.iter().filter(|o| o.as_result().is_some()).count(),
+        3
+    );
+    assert!(outcomes.iter().all(|o| o.as_failure().is_none()));
+}
+
+#[tokio::test]
+async fn limit_does_not_report_deadline_failures() {
+    let options = Options {
+        limit: Some(1),
+        deadline: Some(Duration::from_secs(30)),
+        ..Options::default()
+    };
+    let outcomes = collect(fanout(
+        query(),
+        providers(vec![Mock::new("a").with_results(5)]),
+        options,
+    ))
+    .await;
+
+    assert_eq!(
+        outcomes.iter().filter(|o| o.as_result().is_some()).count(),
+        1
+    );
+    assert!(outcomes.iter().all(|o| o.as_failure().is_none()));
+}
+
 /// A provider that emits results exactly as given, without going through
 /// `FileResult::new`'s shape guarantees.
 struct Raw {

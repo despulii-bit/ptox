@@ -294,13 +294,16 @@ no one to dial directly. [`IpfsGatewayFetcher`] bridges this by rewriting
 `HttpFetcher`, inheriting atomic writes, hash verification, and progress.
 
 **The gateway sees every request, so which gateway you use is a privacy and
-availability decision, not an implementation detail.** `DEFAULT_IPFS_GATEWAY`
+availability decision, not an implementation detail.** [`IpfsGatewayFetcher::with_gateways`]
+takes an ordered list and fails over to the next gateway when one is
+unreachable, recording the winning gateway on `Fetched::address`;
+`IpfsGatewayFetcher::new` sets a single gateway. `DEFAULT_IPFS_GATEWAY`
 (`https://ipfs.io`) is a public convenience for examples and tests. A real client
-should pass its own gateway — self-hosted, a trusted provider, or a configurable
-setting — to `IpfsGatewayFetcher::new`. The rewrite does not verify that the
-gateway returned content matching the CID; integrity comes from the content hash
-passed as `expected_sha256`, which `fetch_merged` fills from a result's `sha256`
-when present.
+should pass its own gateway(s) — self-hosted, a trusted provider, or a
+configurable setting — rather than the default. The rewrite does not verify that
+the gateway returned content matching the CID; integrity comes from the content
+hash passed as `expected_sha256`, which `fetch_merged` fills from a result's
+`sha256` when present.
 
 Malformed `ipfs://` URIs (wrong scheme, or no CID) fail with
 `FetchError::InvalidAddress`.
