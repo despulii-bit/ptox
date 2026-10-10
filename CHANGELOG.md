@@ -28,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
+- `docs/writing-a-provider.md`: a second worked example, a hash-only provider
+  (`requires: ["hashes"]`, `magnet` addresses), showing the engine skipping it
+  for keyword queries via `SearchReport::skipped` and the `ptox-conformance`
+  command (with the `--hash` selector the suite needs to exercise a hash-only
+  provider).
 - `docs/troubleshooting.md`: a symptom-oriented FAQ for the common warnings and
   errors — an unsupported scheme, `FetchError::AllFailed`, per-provider
   timeouts, the `unavailable`/pending state, the `file://` opt-in and

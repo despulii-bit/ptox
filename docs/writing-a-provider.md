@@ -102,7 +102,137 @@ none keeps you universal (any scheme accepted). A client can call
 running a query; a provider that does not answer in time is shown with the
 universal default (`answered: false`), so this diagnostics call never fails.
 
-## 4. Report failures with the right code
+## 4. Worked example: a hash-only provider
+
+The `requires` rule is easier to see end to end. Here is a provider backed by an
+infohash index: it can only answer when the query carries a `hashes` selector,
+and it emits `magnet` addresses.
+
+```rust
+use async_trait::async_trait;
+use ptox::search::{Capabilities, ProviderError, ResultStream, SearchProvider};
+use ptox::types::{Address, ErrorCode, FileQuery, FileResult, HashAlgos};
+use std::sync::Arc;
+
+/// The I/O half: an infohash → metadata index.
+#[async_trait]
+trait InfohashIndex: Send + Sync {
+    async fn lookup(&self, infohash: &str) -> Result<Option<Entry>, String>;
+}
+
+struct Entry {
+    title: String,
+    size: Option<u64>,
+    magnet_uri: String,
+}
+
+struct HashIndexProvider {
+    index: Arc<dyn InfohashIndex>,
+}
+
+#[async_trait]
+impl SearchProvider for HashIndexProvider {
+    fn name(&self) -> &str {
+        "hash-index"
+    }
+
+    async fn capabilities(&self) -> Capabilities {
+        // `requires` makes the engine skip this provider for keyword queries;
+        // `query` documents that `hashes` is the only facet it understands.
+        Capabilities {
+            query: vec!["hashes".into()],
+            requires: vec!["hashes".into()],
+            schemes: vec!["magnet".into()],
+        }
+    }
+
+    fn search(&self, query: &FileQuery) -> ResultStream<'_> {
+        let infohash = query
+            .hashes
+            .as_ref()
+            .and_then(|hashes| hashes.get("infohash"))
+            .cloned();
+        let index = self.index.clone();
+
+        Box::pin(async_stream::stream! {
+            // The engine only sends hash queries, but validate anyway: a
+            // provider is its own last line of defense.
+            let Some(infohash) = infohash else {
+                yield Err(ProviderError::new(
+                    ErrorCode::unsupported(),
+                    "hash-index needs an `infohash` selector",
+                ));
+                return;
+            };
+
+            match index.lookup(&infohash).await {
+                Ok(Some(entry)) => {
+                    let mut result = FileResult::new(
+                        String::new(), // attribution is host-owned
+                        vec![Address::new("magnet", entry.magnet_uri)],
+                    );
+                    result.title = Some(entry.title);
+                    result.size = entry.size;
+                    result.hashes = Some(HashAlgos::from([(
+                        "infohash".to_owned(),
+                        infohash,
+                    )]));
+                    yield Ok(result);
+                }
+                Ok(None) => {} // no hits — yield nothing
+                Err(message) => {
+                    yield Err(ProviderError::new(ErrorCode::transport(), message));
+                }
+            }
+        })
+    }
+}
+```
+
+At the engine the skip is explicit — the hash index is never spawned for a
+keyword query, and is asked once the query carries a hash:
+
+```rust
+use ptox::{Engine, FileQuery};
+use std::sync::Arc;
+
+let engine = Engine::new(vec![
+    Arc::new(HashIndexProvider { index: infohash_index }),
+    Arc::new(keyword_index), // a `text` provider
+]);
+
+// Keyword query: `hash-index` requires `hashes`, so the engine skips it.
+let report = engine.search(FileQuery::new("annual report")).await;
+assert_eq!(report.skipped, vec!["hash-index".to_owned()]);
+
+// Hash query: now the hash index participates.
+let mut query = FileQuery::new("");
+query.hashes = Some(HashAlgos::from([("infohash".to_owned(), hex.to_owned())]));
+let report = engine.search(query).await;
+assert!(report.skipped.is_empty());
+assert!(report
+    .results
+    .iter()
+    .any(|hit| hit.providers.iter().any(|name| name == "hash-index")));
+```
+
+The conformance suite sends a keyword probe by default, which a hash-only
+provider legitimately answers with `unsupported`. To exercise the hash path,
+pass at least one `--hash` selector — the suite then sends a hash query (and no
+keyword query unless you also pass `--query`):
+
+```sh
+cargo run -p ptox-conformance -- \
+  --hash infohash=0123456789abcdef0123456789abcdef01234567 \
+  -- my-provider --config /etc/my.conf
+```
+
+The `requires`/`query` declarations are a routing hint at the fan-out boundary,
+not a substitute for validating your inputs: the engine uses them to avoid
+spawning you needlessly, but your `search` must still reject queries it cannot
+serve with `unsupported` rather than returning an empty stream.
+
+## 5. Report failures with the right code
 
 `SearchProvider::search` yields `Result<FileResult, ProviderError>`. Failures are
 **per item**, so one provider erroring never affects the others. Map your
@@ -128,7 +258,7 @@ host fills in `provider`, so you may leave it empty.) Emitting one bad result
 does not discard your other results, but a client never sees the bad one —
 validate your own output in tests so this never fires.
 
-## 5. Make it offline-testable
+## 6. Make it offline-testable
 
 Keep the network behind a trait so the provider can be driven by a fake in
 tests. The example does this with a `Backend` trait and a scripted
@@ -145,7 +275,7 @@ The provider holds `Arc<dyn Backend>`; production wires in the real client,
 tests wire in a fake that returns canned hits or failures. No sockets are opened
 in the test suite.
 
-## 6. Validate with the conformance suite
+## 7. Validate with the conformance suite
 
 `ptox-conformance` checks the contract for you — termination, result shape,
 error shape, attribution, capability negotiation, and that a `limit`-bearing
@@ -171,7 +301,7 @@ Use `--json` for machine-readable output and `--hash ALGO=VALUE` /
 `--query TEXT` to send hash-only or keyword queries. The binary exits non-zero
 when any check fails, so it drops straight into CI.
 
-## 7. Checklist
+## 8. Checklist
 
 - [ ] `name()` is stable and non-empty.
 - [ ] `capabilities()` matches what you actually do.
