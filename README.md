@@ -168,7 +168,7 @@ single `ptox` crate (`types`, `search`, `provider`, `merge`, `engine`, `fetch`,
 and the opt-in `config`); the conformance suite is the `ptox-conformance` crate.
 `fetch` is on by default; `ipfs`, `file`, and `config` are opt-in. Providers,
 clients, ranking policy, and indexing are separate; the SDK supplies a default
-merge/rank. 179 tests green (232 with `--all-features`).
+merge/rank. 189 tests green (242 with `--all-features`).
 
 ## Contributing
 

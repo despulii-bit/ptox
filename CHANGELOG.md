@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Engine::fetch` of the top hit to a temp file through a fake `Fetcher` that
   still honors the fabric's sha256 verification. Declared as a test target, so
   `cargo test` exercises the whole search-then-fetch path.
+- Property tests for `merge`. Deterministic pseudo-random inputs (a fixed
+  splitmix64, no fuzzing dependency) assert the invariants clients rely on: a
+  content hash deduplicates before title + size (and chained hash identity is
+  transitive), the ranked order does not depend on the order results arrive in,
+  the score grows monotonically with each distinct agreeing provider and adds
+  each provider's configured weight, and `ResultRef::from_merged` /
+  `to_merged` round-trips the fetch-essential fields through the JSON a client
+  persists.
 
 ### Documentation
 
