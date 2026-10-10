@@ -28,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
+- State the project's **neutrality** as a rule in `CONTRIBUTING.md` (generic
+  mechanisms, never a network as a feature's reason), and add a short
+  **Responsible use** note to the READMEs — "neutral infrastructure; you are
+  responsible for what you search for and the providers you configure." Also
+  generalized the README wording that enumerated example networks.
 - `docs/building-a-client.md`: a new **Cookbook** section with three
   copy-pasteable recipes — incremental rendering with `search_stream`, a
   client-side exponential-backoff retry loop around `Engine::fetch` that

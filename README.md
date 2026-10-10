@@ -16,7 +16,8 @@ It has three parts:
 
 It does **not** include providers or user interfaces. Those are built on top:
 
-- **Providers** adapt one network (e.g. clearnet, I2P, Freenet, IPFS, BitTorrent).
+- **Providers** adapt one network (clearnet APIs, anonymous overlays, peer-to-peer
+  networks, content-addressed storage, …).
 - **Clients** are frontends (CLI, GUI, agent) that assemble the SDK.
 
 ```
@@ -104,8 +105,8 @@ The end-to-end walkthrough (engine setup, streaming vs ranked search, partial
 failures, persistence, retrieval, offline testing) is in
 [**docs/building-a-client.md**](docs/building-a-client.md). When something
 misbehaves — an unsupported scheme, `AllFailed`, timeouts, the
-`unavailable`/pending state, `file://` and `allowed_roots`, or I2P/Tor proxies —
-see [**docs/troubleshooting.md**](docs/troubleshooting.md).
+`unavailable`/pending state, `file://` and `allowed_roots`, or overlay/proxied
+fetches — see [**docs/troubleshooting.md**](docs/troubleshooting.md).
 
 ## Configuring a client
 
@@ -169,6 +170,14 @@ and the opt-in `config`); the conformance suite is the `ptox-conformance` crate.
 `fetch` is on by default; `ipfs`, `file`, and `config` are opt-in. Providers,
 clients, ranking policy, and indexing are separate; the SDK supplies a default
 merge/rank. 193 tests green (246 with `--all-features`).
+
+## Responsible use
+
+ptox is **neutral infrastructure**: it defines how to search and retrieve files
+across networks, but bundles no network, no provider, no client, and no index.
+What you search for, which providers you configure, and what you retrieve are your
+responsibility — as is complying with the law and with the terms of any network
+you use. The software is provided "as is", without warranty (see the license).
 
 ## Contributing
 

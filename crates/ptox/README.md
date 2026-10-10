@@ -1,7 +1,8 @@
 # ptox
 
 A language-neutral **SDK for building file-search clients across many networks**
-(clearnet, I2P, Freenet/Hyphanet, IPFS, BitTorrent, …).
+(clearnet APIs, anonymous overlays, peer-to-peer networks, content-addressed
+storage, …).
 
 It provides the contracts, engines, and tooling a client builds on:
 
@@ -111,6 +112,13 @@ A client assembles the SDK: providers in, ranked results and fetched files out.
 See `docs/building-a-client.md` in the repository for the end-to-end guide —
 engine setup, streaming vs ranked search, partial failures, persistence,
 retrieval, and offline testing.
+
+## Responsible use
+
+ptox is neutral infrastructure — a contract and engines, with no bundled network,
+provider, client, or index. What you search for and retrieve, and the providers and
+networks you configure, are your responsibility. Provided "as is", without
+warranty (see the license).
 
 ## License
 
