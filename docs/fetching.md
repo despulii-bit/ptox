@@ -6,7 +6,8 @@ end: the scheme registry, how a fetch is performed, multi-source failover,
 progress, delegated commands, the IPFS gateway, and retries.
 
 The code lives in `ptox::fetch`, behind the `fetch` feature (on by default). The
-`ipfs` gateway fetcher is behind the `ipfs` feature (also on by default), and the
+`ipfs` gateway fetcher is behind the `ipfs` feature (also on by default), a
+local-filesystem fetcher is behind the **off-by-default** `file` feature, and the
 canonical TOML wiring for fetchers is behind `config` (see
 [`configuration.md`](configuration.md)).
 
@@ -92,7 +93,10 @@ assert!(registry.fetcher_for("magnet").is_none());
 - `FetchRegistry::with_defaults()` adds the built-ins:
   - `http` and `https` — [`HttpFetcher`] (always, with the `fetch` feature);
   - `ipfs` — [`IpfsGatewayFetcher`] using `DEFAULT_IPFS_GATEWAY`, when the `ipfs`
-    feature is enabled.
+    feature is enabled;
+  - `file` — [`FileFetcher`] (any readable path), when the `file` feature is
+    enabled. Register a `FileFetcher::with_allowed_roots` yourself to restrict it
+    (see [Local files](#local-files-file)).
 - `register` returns `&mut Self`, so calls chain.
 - `fetcher_for(scheme)` returns the `Arc<dyn Fetcher>` that would handle it, or
   `None`.
@@ -276,6 +280,63 @@ when present.
 Malformed `ipfs://` URIs (wrong scheme, or no CID) fail with
 `FetchError::InvalidAddress`.
 
+## Local files (`file://`)
+
+Some providers are local: a catalogue scanner, an on-disk index, or a test mock
+emits addresses that already point at a file on this machine. The **`file`
+feature** (off by default) adds [`FileFetcher`], which copies such a file to the
+destination with the same guarantees as the HTTP fetcher — a `.part` file, a
+sha256 computed while streaming, verification against `expected_sha256`, an
+atomic rename, and per-chunk progress:
+
+```toml
+# Cargo.toml — opt in explicitly.
+ptox = { version = "0.1", features = ["file"] }
+```
+
+```rust
+use ptox::{Address, FetchRegistry, FileFetcher};
+use std::sync::Arc;
+
+// Any readable path:
+let mut registry = FetchRegistry::new();
+registry.register(Arc::new(FileFetcher::new()));
+
+// Or restrict it to one data directory (recommended):
+// let mut registry = FetchRegistry::new();
+// registry.register(Arc::new(FileFetcher::with_allowed_roots(vec!["/srv/data".into()])));
+# let _ = (
+#     registry,
+#     Address::new("file", "file:///srv/data/report.pdf"),
+# );
+```
+
+`file://` URIs parse as `file:///abs/path` (empty authority) or
+`file://localhost/abs/path`; any other authority is rejected, so a URI cannot
+silently mean a remote share. `%XX` escapes are decoded, so
+`file:///tmp/a%20b.txt` means `/tmp/a b.txt`. Missing paths and malformed escapes
+fail with `FetchError::InvalidAddress`, and a directory (rather than a file)
+fails with `FetchError::Io`.
+
+### Local-file policy
+
+**A `file://` address is a read capability for the whole filesystem.** A provider
+that emits `file:///etc/passwd` (or any other path) makes the client copy that
+file into its download directory, and `fetch_merged` will do it automatically
+without asking. This is why the feature is off by default. When you enable it:
+
+- run only **local, trusted providers** (or a scratch/lab machine); treat any
+  remote provider as hostile;
+- prefer `FileFetcher::with_allowed_roots([...])`, which refuses any source that
+  resolves (after symlinks) outside the named directories — pass the client's
+  data directory so a provider cannot escape it;
+- remember that `FileFetcher::new()` allows any path the process can read, in the
+  spirit of `cp`.
+
+A path outside every configured root fails with `FetchError::AccessDenied`.
+Local providers are still free to *declare* the `file` scheme — scheme support
+is the client's choice, not the provider's.
+
 ## Retrying transient HTTP failures
 
 Real mirrors are flaky. `HttpFetcher::with_retry` installs an opt-in
@@ -347,6 +408,7 @@ default forwards to `fetch` and ignores the callback.
 | `NoAddress` | the result had no addresses to try |
 | `AllFailed { count, errors }` | every address failed; per-attempt errors preserved |
 | `InvalidAddress(msg)` | malformed address for its scheme (e.g. `ipfs://` with no CID) |
+| `AccessDenied(msg)` | a local-file fetch was refused by policy (outside every allowed root) |
 | `Network(msg)` | transport/protocol failure |
 | `Command(msg)` | a delegated helper command failed or produced no `{dest}` |
 | `HashMismatch { expected, actual }` | retrieved bytes did not match the expected sha256 |
@@ -369,6 +431,8 @@ fetchers.
 - [ ] `fetch_with_progress` reports cumulative bytes and is monotonic.
 - [ ] Command schemes create `{dest}` (or fail explicitly).
 - [ ] IPFS clients choose a gateway they trust.
+- [ ] `file://` is enabled only for trusted/local providers, preferably with
+      `FileFetcher::with_allowed_roots`.
 - [ ] Transient HTTP failures are retried only when opted in.
 
 ## See also
@@ -381,5 +445,6 @@ fetchers.
 [`Fetcher`]: https://docs.rs/ptox/latest/ptox/fetch/trait.Fetcher.html
 [`HttpFetcher`]: https://docs.rs/ptox/latest/ptox/fetch/struct.HttpFetcher.html
 [`IpfsGatewayFetcher`]: https://docs.rs/ptox/latest/ptox/fetch/struct.IpfsGatewayFetcher.html
+[`FileFetcher`]: https://docs.rs/ptox/latest/ptox/fetch/struct.FileFetcher.html
 [`CommandFetcher`]: https://docs.rs/ptox/latest/ptox/fetch/struct.CommandFetcher.html
 [`RetryPolicy`]: https://docs.rs/ptox/latest/ptox/fetch/struct.RetryPolicy.html

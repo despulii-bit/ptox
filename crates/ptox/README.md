@@ -37,7 +37,11 @@ case and leading dots; empty collections clear their field.
 Retrieval (the `fetch` feature, on by default) turns a result's `Address` into
 bytes: `Engine::fetch(&result, "out.bin").await`. The `ipfs` feature (also on by
 default) adds an `ipfs://` gateway fetcher, `IpfsGatewayFetcher`, which resolves
-CIDs through a configurable HTTP gateway and delegates to the HTTP fetcher.
+CIDs through a configurable HTTP gateway and delegates to the HTTP fetcher. The
+**off-by-default** `file` feature adds `FileFetcher` for `file://` addresses; it
+copies a local file atomically with sha256 verification and can be restricted to
+a data directory with `FileFetcher::with_allowed_roots` (a `file://` address is a
+filesystem read capability, so enabling the feature is a deliberate choice).
 `HttpFetcher::with_retry` can replay transient GET failures (`5xx`, `408`, `429`,
 connection/stream errors) with exponential backoff; retries are off by default.
 Other schemes (e.g. `magnet`) can be delegated to an external command, and

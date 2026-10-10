@@ -30,6 +30,11 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
+      # Exercises off-by-default features (e.g. `file`), whose tests are not
+      # compiled by the default-feature run above.
+      - name: Test (all features)
+        run: cargo test --workspace --all-features
+
   package:
     name: package (publish dry-run)
     runs-on: ubuntu-latest

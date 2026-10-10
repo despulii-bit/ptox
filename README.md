@@ -39,7 +39,8 @@ repo per shared component — add a crate here.
   - `ptox::search` — the `SearchProvider` contract, `Capabilities`, and the fan-out engine.
   - `ptox::provider` — the NDJSON wire format and `SubprocessProvider`.
   - `ptox::fetch` — the `Fetcher` contract and retrieval (feature `fetch`),
-    including an HTTP gateway fetcher for `ipfs://` (feature `ipfs`).
+    including an HTTP gateway fetcher for `ipfs://` (feature `ipfs`) and an
+    opt-in `file://` fetcher (off-by-default feature `file`).
   - `ptox::merge` — deduplicate + rank results from many providers, plus
     `suggest_filename` for safe client-side naming and the versioned `ResultRef`
     persistence handle.
@@ -49,7 +50,9 @@ repo per shared component — add a crate here.
 
 A client depends on `ptox`. Retrieval (`fetch` and the `ipfs` gateway) and the
 config loader are on by default; disable default features for a search-only
-build. A provider author uses `ptox::types` + `ptox::search` and tests with
+build. The `file://` fetcher is an explicit opt-in: enable the `file` feature to
+fetch local addresses (see [`docs/fetching.md`](docs/fetching.md) for the policy
+implications). A provider author uses `ptox::types` + `ptox::search` and tests with
 `ptox-conformance`.
 
 ## Development

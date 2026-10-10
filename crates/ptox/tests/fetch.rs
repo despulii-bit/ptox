@@ -777,3 +777,228 @@ async fn fetch_merged_with_no_addresses_is_a_no_address_error() {
         .expect_err("no addresses");
     assert!(matches!(error, FetchError::NoAddress));
 }
+
+#[cfg(feature = "file")]
+use ptox::FileFetcher;
+
+#[cfg(feature = "file")]
+#[tokio::test]
+async fn file_fetcher_copies_and_verifies() {
+    use ptox::MergedResult;
+
+    let body: &[u8] = b"local payload";
+    let source = temp_dest("file-source");
+    std::fs::write(&source, body).expect("write source");
+    let dest = temp_dest("file-dest");
+    let registry = FetchRegistry::with_defaults();
+
+    let fetched = registry
+        .fetch(
+            &Address::new("file", format!("file://{}", source.display())),
+            dest.clone(),
+            Some(sha256_hex(body)),
+        )
+        .await
+        .expect("fetch");
+
+    assert_eq!(fetched.bytes, body.len() as u64);
+    assert_eq!(std::fs::read(&dest).expect("read"), body);
+    assert_eq!(fetched.sha256.as_deref(), Some(sha256_hex(body).as_str()));
+    // The scheme is also resolvable through the merged-result path.
+    let result = MergedResult {
+        addresses: vec![Address::new("file", format!("file://{}", source.display()))],
+        ..Default::default()
+    };
+    let merged_dest = temp_dest("file-merged");
+    let fetched = registry
+        .fetch_merged(&result, merged_dest.clone())
+        .await
+        .expect("fetch merged");
+    assert_eq!(fetched.address.scheme, "file");
+    assert_eq!(std::fs::read(&merged_dest).expect("read"), body);
+
+    let _ = std::fs::remove_file(&source);
+    let _ = std::fs::remove_file(&dest);
+    let _ = std::fs::remove_file(&merged_dest);
+}
+
+#[cfg(feature = "file")]
+#[tokio::test]
+async fn file_fetcher_hash_mismatch_leaves_nothing() {
+    let source = temp_dest("file-mismatch-source");
+    std::fs::write(&source, b"local payload").expect("write source");
+    let dest = temp_dest("file-mismatch-dest");
+    let registry = FetchRegistry::with_defaults();
+
+    let error = registry
+        .fetch(
+            &Address::new("file", format!("file://{}", source.display())),
+            dest.clone(),
+            Some("00".to_owned()),
+        )
+        .await
+        .expect_err("hash mismatch");
+
+    assert!(matches!(error, FetchError::HashMismatch { .. }));
+    assert!(!dest.exists(), "no destination on mismatch");
+    let part = dest.with_file_name(format!(
+        "{}.part",
+        dest.file_name().expect("name").to_string_lossy()
+    ));
+    assert!(!part.exists(), "no partial file on mismatch");
+    let _ = std::fs::remove_file(&source);
+}
+
+#[cfg(feature = "file")]
+#[tokio::test]
+async fn file_fetcher_reports_monotonic_progress() {
+    let body = vec![9u8; 200_000];
+    let source = temp_dest("file-progress-source");
+    std::fs::write(&source, &body).expect("write source");
+    let dest = temp_dest("file-progress-dest");
+    let registry = FetchRegistry::with_defaults();
+    let seen = std::sync::Mutex::new(Vec::new());
+
+    let fetched = registry
+        .fetch_with_progress(
+            &Address::new("file", format!("file://{}", source.display())),
+            dest.clone(),
+            None,
+            &|bytes: u64| seen.lock().expect("lock").push(bytes),
+        )
+        .await
+        .expect("fetch");
+
+    assert_eq!(fetched.bytes, body.len() as u64);
+    let seen = seen.into_inner().expect("lock");
+    assert!(
+        seen.len() > 1,
+        "a multi-chunk file must report more than once: {seen:?}"
+    );
+    assert!(
+        seen.windows(2).all(|pair| pair[0] <= pair[1]),
+        "progress must never go backwards: {seen:?}"
+    );
+    assert_eq!(*seen.last().expect("last"), body.len() as u64);
+    let _ = std::fs::remove_file(&source);
+    let _ = std::fs::remove_file(&dest);
+}
+
+#[cfg(feature = "file")]
+#[tokio::test]
+async fn file_fetcher_enforces_allowed_roots() {
+    let parent = std::env::temp_dir().join(format!("ptox-file-roots-{}", std::process::id()));
+    let allowed = parent.join("allowed");
+    let outside = parent.join("outside");
+    std::fs::create_dir_all(&allowed).expect("mkdir allowed");
+    std::fs::create_dir_all(&outside).expect("mkdir outside");
+    let inside_source = allowed.join("inside.txt");
+    let outside_source = outside.join("outside.txt");
+    std::fs::write(&inside_source, b"inside").expect("write inside");
+    std::fs::write(&outside_source, b"outside").expect("write outside");
+
+    let mut registry = FetchRegistry::new();
+    registry.register(Arc::new(FileFetcher::with_allowed_roots(vec![
+        allowed.clone()
+    ])));
+
+    // Inside the root is allowed.
+    let dest = parent.join("inside-dest.txt");
+    registry
+        .fetch(
+            &Address::new("file", format!("file://{}", inside_source.display())),
+            dest.clone(),
+            None,
+        )
+        .await
+        .expect("inside the root");
+    assert_eq!(std::fs::read(&dest).expect("read"), b"inside");
+
+    // Outside the root is refused, and nothing is written.
+    let denied_dest = parent.join("denied-dest.txt");
+    let error = registry
+        .fetch(
+            &Address::new("file", format!("file://{}", outside_source.display())),
+            denied_dest.clone(),
+            None,
+        )
+        .await
+        .expect_err("outside the root must be denied");
+    assert!(
+        matches!(error, FetchError::AccessDenied(_)),
+        "got {error:?}"
+    );
+    assert!(!denied_dest.exists());
+
+    let _ = std::fs::remove_dir_all(&parent);
+}
+
+#[cfg(feature = "file")]
+#[tokio::test]
+async fn file_fetcher_rejects_malformed_uris() {
+    let registry = FetchRegistry::with_defaults();
+    for uri in ["file://", "file://remote/share", "file:///tmp/a%2"] {
+        let error = registry
+            .fetch(&Address::new("file", uri), temp_dest("file-bad"), None)
+            .await
+            .expect_err("malformed file URI");
+        assert!(
+            matches!(error, FetchError::InvalidAddress(_)),
+            "`{uri}` -> {error:?}"
+        );
+    }
+}
+
+#[cfg(feature = "file")]
+#[tokio::test]
+async fn file_fetcher_rejects_a_directory() {
+    let dest = temp_dest("file-directory");
+    let registry = FetchRegistry::with_defaults();
+    let error = registry
+        .fetch(
+            &Address::new("file", format!("file://{}", std::env::temp_dir().display())),
+            dest.clone(),
+            None,
+        )
+        .await
+        .expect_err("a directory is not a regular file");
+    assert!(matches!(error, FetchError::Io(_)), "got {error:?}");
+    assert!(!dest.exists());
+}
+
+#[cfg(feature = "file")]
+#[tokio::test]
+async fn file_fetcher_decodes_percent_escapes_end_to_end() {
+    let dir = std::env::temp_dir().join(format!("ptox-file-escape-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("mkdir");
+    let source = dir.join("report final.txt");
+    std::fs::write(&source, b"escaped payload").expect("write source");
+    let dest = dir.join("dest.txt");
+    let registry = FetchRegistry::with_defaults();
+
+    let fetched = registry
+        .fetch(
+            &Address::new(
+                "file",
+                format!("file://{}/report%20final.txt", dir.display()),
+            ),
+            dest.clone(),
+            None,
+        )
+        .await
+        .expect("fetch via percent-encoded URI");
+
+    assert_eq!(fetched.bytes, 15);
+    assert_eq!(std::fs::read(&dest).expect("read"), b"escaped payload");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[cfg(feature = "file")]
+#[test]
+fn defaults_resolve_file_when_the_feature_is_on() {
+    let registry = FetchRegistry::with_defaults();
+    assert!(
+        registry.fetcher_for("file").is_some(),
+        "with_defaults must include the file fetcher"
+    );
+}

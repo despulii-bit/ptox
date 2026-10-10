@@ -34,6 +34,9 @@ default = ["fetch", "ipfs", "config"]
 fetch = ["dep:hex", "dep:reqwest", "dep:sha2"]
 # `ipfs://` retrieval through a configurable HTTP gateway (implies `fetch`).
 ipfs = ["fetch"]
+# `file://` retrieval from the local filesystem (implies `fetch`). Off by
+# default: it grants read access to any path the process can read.
+file = ["fetch"]
 # Canonical provider/fetcher configuration schema + TOML loader (implies `fetch`).
 config = ["dep:toml", "fetch"]
 

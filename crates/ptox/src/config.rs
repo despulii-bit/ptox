@@ -304,7 +304,8 @@ impl Config {
     }
 
     /// Build a [`FetchRegistry`] from the config: built-in `http`/`https` (and
-    /// the `ipfs://` gateway when the `ipfs` feature is on), plus one
+    /// the `ipfs://` gateway when the `ipfs` feature is on, and the `file`
+    /// fetcher when the `file` feature is on), plus one
     /// [`CommandFetcher`] per `[fetch.commands.<scheme>]`.
     ///
     /// Configured commands are registered **before** the built-ins, so an
@@ -326,6 +327,8 @@ impl Config {
         registry.register(std::sync::Arc::new(
             IpfsGatewayFetcher::with_default_gateway(),
         ));
+        #[cfg(feature = "file")]
+        registry.register(std::sync::Arc::new(crate::fetch::FileFetcher::new()));
         registry
     }
 }

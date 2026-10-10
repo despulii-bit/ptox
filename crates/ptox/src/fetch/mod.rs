@@ -17,11 +17,15 @@
 #![forbid(unsafe_code)]
 
 mod command;
+#[cfg(feature = "file")]
+mod file;
 mod http;
 #[cfg(feature = "ipfs")]
 mod ipfs;
 
 pub use command::CommandFetcher;
+#[cfg(feature = "file")]
+pub use file::FileFetcher;
 pub use http::{HttpFetcher, RetryPolicy};
 #[cfg(feature = "ipfs")]
 pub use ipfs::{IpfsGatewayFetcher, DEFAULT_IPFS_GATEWAY};
@@ -72,6 +76,9 @@ pub enum FetchError {
         /// The individual failures, in the order the addresses were tried.
         errors: Vec<FetchError>,
     },
+    /// A local-file fetch was refused by policy (outside every configured root).
+    #[error("access denied: {0}")]
+    AccessDenied(String),
 }
 
 /// A single retrieval job: one address, one destination path.
@@ -148,17 +155,22 @@ impl FetchRegistry {
         Self::default()
     }
 
-    /// Registry with the built-in fetchers: `http`/`https`, plus an `ipfs`
-    /// gateway fetcher when the `ipfs` feature is enabled.
+    /// Registry with the built-in fetchers: `http`/`https`, an `ipfs` gateway
+    /// fetcher when the `ipfs` feature is enabled, and a `file` fetcher when the
+    /// `file` feature is enabled.
     ///
     /// The IPFS gateway is `DEFAULT_IPFS_GATEWAY` (an `IpfsGatewayFetcher`);
     /// build the registry yourself with `IpfsGatewayFetcher::new` to choose a
-    /// different gateway.
+    /// different gateway. The `file` fetcher is built with `FileFetcher::new()`
+    /// (any readable path); register a `FileFetcher::with_allowed_roots` yourself
+    /// to restrict it.
     pub fn with_defaults() -> Self {
         let mut registry = Self::new();
         registry.register(Arc::new(HttpFetcher::new()));
         #[cfg(feature = "ipfs")]
         registry.register(Arc::new(IpfsGatewayFetcher::with_default_gateway()));
+        #[cfg(feature = "file")]
+        registry.register(Arc::new(FileFetcher::new()));
         registry
     }
 

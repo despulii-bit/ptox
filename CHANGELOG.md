@@ -8,6 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `fetch`: an opt-in `file://` fetcher. A new `FileFetcher` (behind the
+  **off-by-default** `file` feature) copies a local file to the destination with
+  the same guarantees as the HTTP fetcher — a `.part` file, a streamed sha256,
+  verification against `expected_sha256`, an atomic rename, and per-chunk
+  progress. `file:///abs/path` and `file://localhost/abs/path` are accepted (any
+  other authority is rejected), `%XX` escapes are decoded, and directories fail
+  with `FetchError::Io`. A new `FetchError::AccessDenied` is returned for a path
+  outside every configured root. `FileFetcher::with_allowed_roots` restricts the
+  fetcher to a data directory; `FileFetcher::new` allows any readable path. The
+  fetcher is registered by `FetchRegistry::with_defaults` and
+  `Config::fetch_registry` when the feature is enabled. Because a `file://`
+  address grants read access to the filesystem, the feature is off by default and
+  the policy is documented in `docs/fetching.md`.
+
 - Conformance: emitted address schemes are now cross-checked against declared
   capabilities. `ptox-conformance` reports an `address_schemes_declared` check
   (for both in-process and subprocess providers) that fails when a provider

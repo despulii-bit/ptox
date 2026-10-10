@@ -96,7 +96,8 @@ example `ipfs cat` writes to stdout) will otherwise look like a successful
 0-byte download or fail; see [`CommandFetcher`] for the contract.
 
 `Config::fetch_registry()` builds a registry from the config: built-in
-`http`/`https` (and the `ipfs://` gateway when the `ipfs` feature is on) plus one
+`http`/`https` (and the `ipfs://` gateway when the `ipfs` feature is on, and the
+local `file://` fetcher when the off-by-default `file` feature is on) plus one
 `CommandFetcher` per entry. Configured commands are registered **first**, so an
 explicitly configured scheme wins over a built-in handler for the same scheme.
 
