@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Provider-authoring docs and example. `examples/rust_provider.rs` is a
+  runnable, offline-testable `SearchProvider`: it implements the trait with a
+  streaming `search`, declares `Capabilities`, maps a fake backend's failures
+  onto the right `ErrorCode`s, and is covered by unit tests driven through the
+  fake transport. `docs/writing-a-provider.md` is the end-to-end guide
+  (shape, capabilities, errors, offline testing, `ptox-conformance`).
 - `fetch`: an `ipfs://` gateway fetcher. `IpfsGatewayFetcher` rewrites
   `ipfs://<cid>[/path]` onto a configurable HTTP gateway (`<gateway>/ipfs/...`)
   and delegates to `HttpFetcher`, so IPFS joins `http`/`https` as a scheme the

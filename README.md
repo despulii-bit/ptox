@@ -61,10 +61,17 @@ nix-shell --run 'cargo clippy --workspace --all-targets -- -D warnings'
 A provider is one network or index. Two ways to plug one in:
 
 - **Rust:** implement the `SearchProvider` trait and pass it to `fanout`.
+  See the runnable [`rust_provider`](crates/ptox/examples/rust_provider.rs)
+  example (trait impl, `Capabilities`, error codes, and an offline test with a
+  fake transport).
 - **Any language:** speak the NDJSON wire format (contract §9) and wrap the
   program with `SubprocessProvider`. Configuration (proxies, routers, data dirs)
   is passed via `.arg()` / `.env()`. Output is read with a bound, so a hostile
-  provider cannot exhaust memory.
+  provider cannot exhaust memory. See
+  [`ndjson_provider`](crates/ptox/examples/ndjson_provider.rs).
+
+The end-to-end walkthrough — shape, capabilities, error codes, offline testing,
+and validation — is in [**docs/writing-a-provider.md**](docs/writing-a-provider.md).
 
 Test any provider against the contract with the conformance suite:
 
@@ -72,8 +79,7 @@ Test any provider against the contract with the conformance suite:
 cargo run -p ptox-conformance -- -- <provider-command> [args...]
 ```
 
-See `crates/ptox/examples/ndjson_provider.rs` for a minimal wire provider
-and `crates/ptox-conformance/examples/fixture_provider.rs` for one that
+`crates/ptox-conformance/examples/fixture_provider.rs` is a provider that
 demonstrates the failure modes the suite detects.
 
 ## Development files
@@ -87,7 +93,7 @@ Private, pre-release. Contract **v2** locked (with a JSON Schema). The SDK is a
 single `ptox` crate with `types` / `search` / `provider` / `fetch` modules (fetch
 behind a feature); the conformance suite is the `ptox-conformance` crate.
 Providers, clients, ranking policy, and indexing are separate; the SDK supplies a
-default merge/rank. 70 tests green.
+default merge/rank. 76 tests green.
 
 ## Contributing
 

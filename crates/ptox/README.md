@@ -31,6 +31,21 @@ Providers (network plugins) and clients (frontends) are separate software. The
 contract, JSON Schema, and conformance suite live in the repository:
 <https://github.com/despulii-bit/ptox>.
 
+## Writing a provider
+
+Implement the `SearchProvider` trait and pass it to `fanout` or `Engine`. The
+repository ships a complete, runnable example — trait impl, `Capabilities`, error
+codes, and an offline test with a fake transport:
+
+```sh
+cargo run -p ptox --example rust_provider
+```
+
+A provider in any other language can speak the NDJSON wire format and be wrapped
+with `SubprocessProvider`. Validate either kind with the `ptox-conformance`
+suite. See `docs/writing-a-provider.md` in the repository for the end-to-end
+guide.
+
 ## License
 
 Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or

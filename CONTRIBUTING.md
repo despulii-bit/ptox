@@ -50,6 +50,9 @@ cargo test --workspace
 A provider is **one network or index**. It turns a `FileQuery` into a stream of
 `FileResult` / `Failure` and does nothing else.
 
+The end-to-end walkthrough (capabilities, error codes, offline testing,
+conformance) is [docs/writing-a-provider.md](docs/writing-a-provider.md).
+
 ### In Rust
 
 Implement `SearchProvider`:
@@ -57,12 +60,14 @@ Implement `SearchProvider`:
 ```rust
 pub trait SearchProvider: Send + Sync {
     fn name(&self) -> &str;
+    fn capabilities(&self) -> Capabilities;      // what you can serve
     fn search(&self, query: &FileQuery) -> ResultStream<'_>;
 }
 ```
 
 All protocol, proxy, auth, and transport detail lives inside the provider and is
-injected at construction, never per query.
+injected at construction, never per query. See
+`crates/ptox/examples/rust_provider.rs` for a complete, offline-testable example.
 
 ### In any language
 
