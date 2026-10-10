@@ -14,12 +14,13 @@
 //! ```
 
 use crate::merge::{merge, MergeOptions, MergedResult};
-use crate::search::{fanout, Options, SearchProvider};
+use crate::search::{fanout, Options, ProviderProbe, SearchProvider};
 use crate::types::{Failure, FileQuery, Outcome};
 use futures::{Stream, StreamExt};
 use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::time::Duration;
 
 #[cfg(feature = "fetch")]
 use crate::fetch::{FetchError, FetchRegistry, Fetched};
@@ -196,6 +197,19 @@ impl Engine {
         destination: impl Into<PathBuf>,
     ) -> Result<Fetched, FetchError> {
         self.fetchers.fetch_merged(result, destination).await
+    }
+
+    /// Probe every provider with one query and classify its answer — for health
+    /// checks and `providers` commands.
+    ///
+    /// Uses [`Options::timeout`] when set, otherwise a 10-second default. See
+    /// [`crate::probe`] for the status semantics.
+    pub async fn probe(&self, query: FileQuery) -> Vec<ProviderProbe> {
+        let timeout = self
+            .options
+            .timeout
+            .unwrap_or_else(|| Duration::from_secs(10));
+        crate::search::probe(query, self.providers.clone(), timeout).await
     }
 }
 

@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-10-10
+
+### Added
+
+- `probe` and `Engine::probe`: classify each provider's answer to a query as
+  `Results` / `Empty` / `Skipped` / `Failed` / `Timeout`, for health checks and
+  `providers` commands. `ProviderProbe` and `ProbeStatus` are exported.
+
 ## [0.1.2] - 2026-10-10
 
 ### Added
@@ -67,7 +75,8 @@ First public release.
 - **Spec** — the contract, conformance requirements, JSON Schema, and test
   vectors, shipped inside `crates/ptox/spec/`.
 
-[Unreleased]: https://github.com/despulii-bit/ptox/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/despulii-bit/ptox/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/despulii-bit/ptox/releases/tag/v0.1.3
 [0.1.2]: https://github.com/despulii-bit/ptox/releases/tag/v0.1.2
 [0.1.1]: https://github.com/despulii-bit/ptox/releases/tag/v0.1.1
 [0.1.0]: https://github.com/despulii-bit/ptox/releases/tag/v0.1.0
