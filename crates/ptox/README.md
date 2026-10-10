@@ -19,8 +19,15 @@ let report = engine.search(ptox::FileQuery::new("annual report")).await;
 for result in &report.results {
     println!("{:?} from {:?}", result.title, result.providers);
 }
+for metric in &report.metrics {
+    println!("{}: {} result(s) in {:?}", metric.provider, metric.results, metric.elapsed);
+}
 # }
 ```
+
+`SearchReport::metrics` reports per-provider result/failure counts and elapsed
+time (no query or result content); `fanout_with_metrics` exposes the same
+`ptox::Metrics` collector to clients that drive providers directly.
 
 Retrieval (the `fetch` feature, on by default) turns a result's `Address` into
 bytes: `Engine::fetch(&result, "out.bin").await`. The `ipfs` feature (also on by

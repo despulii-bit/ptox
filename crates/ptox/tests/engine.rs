@@ -127,6 +127,33 @@ async fn engine_skips_incapable_providers() {
 }
 
 #[tokio::test]
+async fn engine_reports_per_provider_metrics() {
+    let providers: Vec<Arc<dyn SearchProvider>> = vec![
+        Arc::new(Mock {
+            result: result("a", "1111"),
+        }),
+        Arc::new(Mock {
+            result: result("b", "2222"),
+        }),
+        Arc::new(Failing),
+    ];
+    let engine = Engine::new(providers);
+    let report = engine.search(FileQuery::new("x")).await;
+
+    let metrics = report.metrics;
+    assert_eq!(metrics.len(), 3);
+    // Sorted by provider name: a, b, failing.
+    assert_eq!(metrics[0].provider, "a");
+    assert_eq!(metrics[0].results, 1);
+    assert_eq!(metrics[0].failures, 0);
+    assert_eq!(metrics[1].provider, "b");
+    assert_eq!(metrics[1].results, 1);
+    assert_eq!(metrics[2].provider, "failing");
+    assert_eq!(metrics[2].results, 0);
+    assert_eq!(metrics[2].failures, 1);
+}
+
+#[tokio::test]
 async fn engine_streams_outcomes_and_reports_skipped() {
     let providers: Vec<Arc<dyn SearchProvider>> = vec![
         Arc::new(Mock {

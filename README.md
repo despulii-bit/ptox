@@ -127,6 +127,15 @@ an external command (`magnet` → `aria2c`, …). The end-to-end guide — schem
 registry, the `CommandFetcher` `{dest}` contract, gateway policy, failover, and
 retries — is in [**docs/fetching.md**](docs/fetching.md).
 
+## Observing a search
+
+`Engine::search` returns per-provider [`ProviderMetric`]s on
+[`SearchReport::metrics`](crates/ptox/src/engine.rs) — result/failure counts and
+elapsed time for each provider — so a client can show progress and diagnostics
+without instrumenting the fan-out itself. The collector (`ptox::Metrics`) is also
+available to `fanout_with_metrics` for clients that drive providers directly.
+Metrics carry **counts and timings only**, never query text or result content.
+
 ## Development files
 
 Agent/development scaffolding does **not** live here. It is tracked in a separate
@@ -138,7 +147,7 @@ Private, pre-release. Contract **v2** locked (with a JSON Schema). The SDK is a
 single `ptox` crate with `types` / `search` / `provider` / `fetch` modules (fetch
 behind a feature); the conformance suite is the `ptox-conformance` crate.
 Providers, clients, ranking policy, and indexing are separate; the SDK supplies a
-default merge/rank. 122 tests green.
+default merge/rank. 125 tests green.
 
 ## Contributing
 

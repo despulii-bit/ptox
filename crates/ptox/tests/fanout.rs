@@ -1,7 +1,7 @@
 use futures::StreamExt;
 use ptox::{
-    fanout, Address, ErrorCode, FileQuery, FileResult, Options, Outcome, ProviderError,
-    ResultStream, SearchProvider,
+    fanout, fanout_with_metrics, Address, ErrorCode, FileQuery, FileResult, Metrics, Options,
+    Outcome, ProviderError, ResultStream, SearchProvider,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -295,4 +295,61 @@ async fn core_never_fetches_addresses() {
         .find_map(|o| o.as_result())
         .expect("a result");
     assert_eq!(result.addresses[0].uri, "https://example.org/file-0");
+}
+
+#[tokio::test]
+async fn metrics_record_result_counts_and_elapsed() {
+    let metrics = Metrics::new();
+    let outcomes = collect(fanout_with_metrics(
+        query(),
+        providers(vec![
+            Mock::new("a").with_results(3),
+            Mock::new("b").with_results(1),
+        ]),
+        Options::default(),
+        &metrics,
+    ))
+    .await;
+
+    assert_eq!(
+        outcomes.iter().filter(|o| o.as_result().is_some()).count(),
+        4
+    );
+    let snapshot = metrics.snapshot();
+    assert_eq!(snapshot.len(), 2);
+    // Sorted by provider name.
+    assert_eq!(snapshot[0].provider, "a");
+    assert_eq!(snapshot[0].results, 3);
+    assert_eq!(snapshot[0].failures, 0);
+    assert_eq!(snapshot[1].provider, "b");
+    assert_eq!(snapshot[1].results, 1);
+}
+
+#[tokio::test]
+async fn metrics_record_failures_and_timeouts() {
+    let options = Options {
+        timeout: Some(Duration::from_millis(100)),
+        ..Options::default()
+    };
+    let metrics = Metrics::new();
+    let _ = collect(fanout_with_metrics(
+        query(),
+        providers(vec![
+            Mock::new("bad").with_error("refused"),
+            Mock::new("slow")
+                .with_delay(Duration::from_secs(5))
+                .with_results(1),
+        ]),
+        options,
+        &metrics,
+    ))
+    .await;
+
+    let snapshot = metrics.snapshot();
+    assert_eq!(snapshot.len(), 2);
+    assert_eq!(snapshot[0].provider, "bad");
+    assert_eq!(snapshot[0].failures, 1);
+    assert_eq!(snapshot[1].provider, "slow");
+    assert_eq!(snapshot[1].failures, 1);
+    assert!(!metrics.is_empty());
 }

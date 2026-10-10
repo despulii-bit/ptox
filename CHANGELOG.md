@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Per-provider search metrics. `Engine::search` now returns `SearchReport::metrics`
+  — a `ProviderMetric` per provider with its result count, failure count, and
+  elapsed time. A new `fanout_with_metrics` fills a shared `ptox::Metrics`
+  collector, so clients driving `fanout` directly get the same data. Metrics are
+  counts and timings only: they never carry query text or result content.
+
 - Documentation: `docs/fetching.md`, an end-to-end guide to the retrieval side —
   the scheme registry, atomic write + hash verification, multi-source failover,
   progress reporting, the `CommandFetcher` `{dest}` contract (and the 0-byte

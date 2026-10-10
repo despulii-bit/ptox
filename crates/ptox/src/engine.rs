@@ -14,7 +14,9 @@
 //! ```
 
 use crate::merge::{merge, MergeOptions, MergedResult};
-use crate::search::{fanout, Options, ProviderProbe, SearchProvider};
+use crate::search::{
+    fanout, fanout_with_metrics, Metrics, Options, ProviderMetric, ProviderProbe, SearchProvider,
+};
 use crate::types::{Failure, FileQuery, Outcome};
 use futures::{Stream, StreamExt};
 use std::collections::HashMap;
@@ -35,6 +37,9 @@ pub struct SearchReport {
     pub failures: Vec<Failure>,
     /// Providers skipped because their declared capabilities reject the query.
     pub skipped: Vec<String>,
+    /// Per-provider counts and timings, sorted by provider name. Carries no
+    /// query or result content; see [`ProviderMetric`].
+    pub metrics: Vec<ProviderMetric>,
 }
 
 /// A streaming search: which providers were skipped, plus the live outcome stream.
@@ -125,9 +130,19 @@ impl Engine {
     /// Run the query across every capable provider; return ranked, deduplicated
     /// results. Providers whose declared capabilities reject the query are
     /// skipped (listed in [`SearchReport::skipped`]) without being spawned.
+    ///
+    /// The report also carries per-provider [`ProviderMetric`]s (result/failure
+    /// counts and elapsed time), so a client can show progress and diagnostics.
     pub async fn search(&self, query: FileQuery) -> SearchReport {
-        let SearchStream { skipped, outcomes } = self.search_stream(query).await;
-        let outcomes = collect(outcomes).await;
+        let (providers, skipped) = self.capable(&query).await;
+        let metrics = Metrics::new();
+        let outcomes = collect(fanout_with_metrics(
+            query,
+            providers,
+            self.options.clone(),
+            &metrics,
+        ))
+        .await;
         let results: Vec<crate::types::FileResult> = outcomes
             .iter()
             .filter_map(|outcome| outcome.as_result().cloned())
@@ -146,6 +161,7 @@ impl Engine {
             results,
             failures,
             skipped,
+            metrics: metrics.snapshot(),
         }
     }
 
