@@ -110,13 +110,20 @@ resolver). The existing conformance suite encodes the contract — keep it green
 ## Scope rules (important)
 
 - The core has **no state, no policy, no discovery, and no network I/O**. Don't add them.
-- Don't merge, dedup, or rank in the core; that is a separate layer.
+- The fan-out streams raw results; it doesn't merge, dedup, or rank. That is the
+  separate `merge` post-processor, and the ranking weights are caller-supplied policy.
 - **Never auto-fetch** an `Address`.
 - Unknown fields must be tolerated at every level; don't reject wire messages for
   extra keys.
 - Changing the contract requires a spec update in the same PR. Breaking changes
   also bump the contract version; additive optional fields and clarifying
   behavior changes do not (see `spec/core-contract.md` §10).
+- **Neutrality.** Add *generic mechanisms*, not network-specific code. A feature may
+  be motivated by a particular network, but its rationale — in the changelog, docs,
+  and names — stays generic: describe the capability, never "support for <network>."
+  Network names may appear only as illustrative members of an open set (an example
+  scheme or an example proxy URL). A module named after a URI scheme (`http`,
+  `ipfs`) is a scheme handler, not a network endorsement.
 
 ## Repository hygiene
 
