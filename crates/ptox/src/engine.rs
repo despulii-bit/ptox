@@ -15,9 +15,10 @@
 
 use crate::merge::{merge, MergeOptions, MergedResult};
 use crate::search::{fanout, Options, SearchProvider};
-use crate::types::{Failure, FileQuery};
-use futures::StreamExt;
+use crate::types::{Failure, FileQuery, Outcome};
+use futures::{Stream, StreamExt};
 use std::collections::HashMap;
+use std::pin::Pin;
 use std::sync::Arc;
 
 #[cfg(feature = "fetch")]
@@ -33,6 +34,35 @@ pub struct SearchReport {
     pub failures: Vec<Failure>,
     /// Providers skipped because their declared capabilities reject the query.
     pub skipped: Vec<String>,
+}
+
+/// A streaming search: which providers were skipped, plus the live outcome stream.
+///
+/// A [`SearchStream`] is itself a [`Stream`] of [`Outcome`]s, so it can be
+/// consumed directly. Dropping it cancels in-flight providers.
+pub struct SearchStream {
+    /// Providers skipped because their declared capabilities reject the query.
+    pub skipped: Vec<String>,
+    /// The live outcomes, as they arrive (never merged or ranked).
+    outcomes: Pin<Box<dyn Stream<Item = Outcome> + Send>>,
+}
+
+impl SearchStream {
+    /// Take the underlying outcome stream, discarding the skipped list.
+    pub fn into_outcomes(self) -> Pin<Box<dyn Stream<Item = Outcome> + Send>> {
+        self.outcomes
+    }
+}
+
+impl Stream for SearchStream {
+    type Item = Outcome;
+
+    fn poll_next(
+        mut self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        self.outcomes.as_mut().poll_next(cx)
+    }
 }
 
 /// Runs providers and (optionally) retrieves results.
@@ -95,17 +125,8 @@ impl Engine {
     /// results. Providers whose declared capabilities reject the query are
     /// skipped (listed in [`SearchReport::skipped`]) without being spawned.
     pub async fn search(&self, query: FileQuery) -> SearchReport {
-        let mut providers = Vec::new();
-        let mut skipped = Vec::new();
-        for provider in &self.providers {
-            if provider.capabilities().await.accepts(&query) {
-                providers.push(provider.clone());
-            } else {
-                skipped.push(provider.name().to_owned());
-            }
-        }
-
-        let outcomes = collect(fanout(query, providers, self.options.clone())).await;
+        let SearchStream { skipped, outcomes } = self.search_stream(query).await;
+        let outcomes = collect(outcomes).await;
         let results: Vec<crate::types::FileResult> = outcomes
             .iter()
             .filter_map(|outcome| outcome.as_result().cloned())
@@ -125,6 +146,46 @@ impl Engine {
             failures,
             skipped,
         }
+    }
+
+    /// Like [`Engine::search`], but stream attributed [`Outcome`]s as they arrive
+    /// instead of waiting for every provider.
+    ///
+    /// The returned [`SearchStream`] carries the providers skipped for this query
+    /// and is itself a [`Stream`]; dropping it cancels in-flight providers.
+    /// Outcomes are **not** merged or ranked (merging needs every result) — use
+    /// this for interactive clients, and [`Engine::search`] for a ranked list.
+    pub async fn search_stream(&self, query: FileQuery) -> SearchStream {
+        let (providers, skipped) = self.capable(&query).await;
+        SearchStream {
+            skipped,
+            outcomes: Box::pin(fanout(query, providers, self.options.clone())),
+        }
+    }
+
+    /// Partition providers by whether their capabilities accept `query`,
+    /// probing them concurrently so one slow provider doesn't stall the rest.
+    async fn capable(&self, query: &FileQuery) -> (Vec<Arc<dyn SearchProvider>>, Vec<String>) {
+        let checks = self.providers.iter().map(|provider| {
+            let provider = provider.clone();
+            let probe = query.clone();
+            async move {
+                let accepts = provider.capabilities().await.accepts(&probe);
+                (accepts, provider)
+            }
+        });
+        let evaluated = futures::future::join_all(checks).await;
+
+        let mut providers = Vec::new();
+        let mut skipped = Vec::new();
+        for (accepts, provider) in evaluated {
+            if accepts {
+                providers.push(provider);
+            } else {
+                skipped.push(provider.name().to_owned());
+            }
+        }
+        (providers, skipped)
     }
 
     /// Fetch the preferred address of a result.

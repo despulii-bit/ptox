@@ -6,14 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-10
+
 ### Added
 
+- `Engine::search_stream` returns a streaming `SearchStream` (itself a
+  `Stream<Item = Outcome>`), so clients can render results as they arrive
+  instead of waiting for every provider. `Engine::search` still returns the
+  ranked, merged `SearchReport`.
 - `ptox-conformance`: a `--hash ALGO=VALUE` selector (repeatable) to send
   hash-only queries (e.g. `--hash cid=<cid>`), so hash-only providers such as
   IPFS/BitTorrent can be validated. `--query` is optional when `--hash` is given.
 
 ### Changed
 
+- Capability probing is now concurrent: one slow provider no longer stalls
+  engine startup.
 - `fanout` now normalizes attribution: a result with an empty `provider` is
   stamped with the emitting provider's name, so Rust provider authors no longer
   have to set it themselves (matching the wire contract, where the host owns it).
@@ -59,6 +67,7 @@ First public release.
 - **Spec** — the contract, conformance requirements, JSON Schema, and test
   vectors, shipped inside `crates/ptox/spec/`.
 
-[Unreleased]: https://github.com/despulii-bit/ptox/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/despulii-bit/ptox/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/despulii-bit/ptox/releases/tag/v0.1.2
 [0.1.1]: https://github.com/despulii-bit/ptox/releases/tag/v0.1.1
 [0.1.0]: https://github.com/despulii-bit/ptox/releases/tag/v0.1.0

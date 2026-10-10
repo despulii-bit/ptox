@@ -23,7 +23,7 @@ pub mod types;
 #[cfg(feature = "fetch")]
 pub mod fetch;
 
-pub use engine::{Engine, SearchReport};
+pub use engine::{Engine, SearchReport, SearchStream};
 pub use merge::{merge, MergeOptions, MergedResult};
 pub use provider::*;
 pub use search::*;

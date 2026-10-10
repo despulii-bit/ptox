@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use futures::StreamExt;
 use ptox::{
     Address, Capabilities, Engine, FileQuery, FileResult, ProviderError, ResultStream,
     SearchProvider,
@@ -123,4 +124,27 @@ async fn engine_skips_incapable_providers() {
     hash_query.hashes = Some(HashMap::from([("infohash".to_owned(), "abc".to_owned())]));
     let hash = engine.search(hash_query).await;
     assert!(hash.skipped.is_empty());
+}
+
+#[tokio::test]
+async fn engine_streams_outcomes_and_reports_skipped() {
+    let providers: Vec<Arc<dyn SearchProvider>> = vec![
+        Arc::new(Mock {
+            result: result("a", "1111"),
+        }),
+        Arc::new(HashOnly),
+    ];
+    let engine = Engine::new(providers);
+
+    let stream = engine.search_stream(FileQuery::new("x")).await;
+    assert_eq!(stream.skipped, vec!["hash-only"]);
+
+    let mut stream = Box::pin(stream);
+    let mut results = 0;
+    while let Some(outcome) = stream.next().await {
+        if outcome.as_result().is_some() {
+            results += 1;
+        }
+    }
+    assert_eq!(results, 1);
 }
