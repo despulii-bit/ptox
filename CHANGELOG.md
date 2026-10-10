@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `ptox-conformance`: a `limit_honored` check. The suite now sends a probe query
+  carrying a small `limit` and fails a provider that returns more results than
+  the selector allows, closing the gap where `limit` was documented as an upper
+  bound but never exercised by the provider checks. A provider that returns
+  fewer results (or none) still passes. `spec/conformance.md` §G and the provider
+  guide document the requirement; the fixture provider gained a `limit-ignored`
+  mode to prove the check catches a violation.
+
 - `search`: query-free capability introspection. `Engine::provider_capabilities()`
   (and the free function `ptox::provider_capabilities`) asks every provider for
   its declared `Capabilities` concurrently, without running a query, so a

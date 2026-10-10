@@ -125,6 +125,7 @@ async fn undeclared_capabilities_are_universal() {
 struct MockProvider {
     name: String,
     capabilities: Capabilities,
+    result_count: usize,
 }
 
 #[async_trait]
@@ -139,13 +140,16 @@ impl SearchProvider for MockProvider {
 
     fn search(&self, _query: &FileQuery) -> ResultStream<'_> {
         let name = self.name.clone();
+        let count = self.result_count;
         Box::pin(async_stream::stream! {
-            let mut result = FileResult::new(
-                name,
-                vec![Address::new("https", "https://example.org/x")],
-            );
-            result.title = Some("x".to_owned());
-            yield Ok(result);
+            for index in 0..count {
+                let mut result = FileResult::new(
+                    name.clone(),
+                    vec![Address::new("https", format!("https://example.org/x{index}"))],
+                );
+                result.title = Some(format!("x{index}"));
+                yield Ok(result);
+            }
         })
     }
 }
@@ -155,6 +159,7 @@ async fn in_process_provider_passes() {
     let provider = MockProvider {
         name: "mock".to_owned(),
         capabilities: Capabilities::universal(),
+        result_count: 1,
     };
     let report = check_in_process("mock", &provider, &Options::default()).await;
     assert!(report.passed(), "unexpected failures: {:?}", report.checks);
@@ -168,6 +173,7 @@ async fn in_process_declared_schemes_pass() {
             schemes: vec!["https".to_owned()],
             ..Capabilities::default()
         },
+        result_count: 1,
     };
     let report = check_in_process("mock", &provider, &Options::default()).await;
     assert!(report.passed(), "unexpected failures: {:?}", report.checks);
@@ -185,6 +191,7 @@ async fn in_process_undeclared_schemes_fail() {
             schemes: vec!["magnet".to_owned()],
             ..Capabilities::default()
         },
+        result_count: 1,
     };
     let report = check_in_process("mock", &provider, &Options::default()).await;
     assert!(!report.passed());
@@ -192,6 +199,54 @@ async fn in_process_undeclared_schemes_fail() {
         .checks
         .iter()
         .any(|check| check.name == "address_schemes_declared" && !check.passed));
+}
+
+#[tokio::test]
+async fn in_process_ignored_limit_fails() {
+    let provider = MockProvider {
+        name: "mock".to_owned(),
+        capabilities: Capabilities::universal(),
+        result_count: 3,
+    };
+    let report = check_in_process("mock", &provider, &Options::default()).await;
+    assert!(!report.passed());
+    assert!(report
+        .checks
+        .iter()
+        .any(|check| check.name == "limit_honored" && !check.passed));
+}
+
+#[tokio::test]
+async fn in_process_provider_honors_limit() {
+    let provider = MockProvider {
+        name: "mock".to_owned(),
+        capabilities: Capabilities::universal(),
+        result_count: 1,
+    };
+    let report = check_in_process("mock", &provider, &Options::default()).await;
+    assert!(report
+        .checks
+        .iter()
+        .any(|check| check.name == "limit_honored" && check.passed));
+}
+
+#[tokio::test]
+async fn good_subprocess_provider_honors_limit() {
+    let report = check_command(&fixture_bin(), &mode("good"), &Options::default()).await;
+    assert!(report
+        .checks
+        .iter()
+        .any(|check| check.name == "limit_honored" && check.passed));
+}
+
+#[tokio::test]
+async fn ignored_limit_fails_the_limit_check() {
+    let report = check_command(&fixture_bin(), &mode("limit-ignored"), &Options::default()).await;
+    assert!(!report.passed());
+    assert!(report
+        .checks
+        .iter()
+        .any(|check| check.name == "limit_honored" && !check.passed));
 }
 
 #[tokio::test]

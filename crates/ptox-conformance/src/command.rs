@@ -166,6 +166,39 @@ pub async fn check_command(program: &Path, args: &[String], options: &Options) -
         ),
     }
 
+    // `limit` must cap output. Send the probe query once and count what comes
+    // back; a provider that returns fewer (or nothing) still passes.
+    let limit_query = crate::limit_probe();
+    let limit = limit_query.limit.expect("probe carries a limit");
+    match run_once(
+        program,
+        args,
+        &limit_query,
+        options.timeout,
+        options.max_line_bytes,
+    )
+    .await
+    {
+        Ok(run) if run.terminated => {
+            let count = run.results.len();
+            report.push(
+                crate::LIMIT_CHECK,
+                count <= limit as usize,
+                format!("returned {count} result(s) for limit {limit}"),
+            );
+        }
+        Ok(_) => report.push(
+            crate::LIMIT_CHECK,
+            false,
+            format!("limit {limit} probe did not finish"),
+        ),
+        Err(error) => report.push(
+            crate::LIMIT_CHECK,
+            false,
+            format!("limit {limit} probe failed to spawn: {error}"),
+        ),
+    }
+
     report
 }
 

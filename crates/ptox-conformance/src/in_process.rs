@@ -108,5 +108,34 @@ pub async fn check_in_process(
         },
     );
 
+    // `limit` must cap output. The suite sends one probe query carrying a small
+    // limit and requires the provider to return no more than that; a provider
+    // that returns fewer (or nothing) still passes.
+    let limit_query = crate::limit_probe();
+    let limit = limit_query.limit.expect("probe carries a limit");
+    let limit_outcome = tokio::time::timeout(options.timeout, async {
+        let mut stream = provider.search(&limit_query);
+        let mut count = 0usize;
+        while let Some(item) = stream.next().await {
+            if item.is_ok() {
+                count += 1;
+            }
+        }
+        count
+    })
+    .await;
+    match limit_outcome {
+        Ok(count) => report.push(
+            crate::LIMIT_CHECK,
+            count <= limit as usize,
+            format!("returned {count} result(s) for limit {limit}"),
+        ),
+        Err(_) => report.push(
+            crate::LIMIT_CHECK,
+            false,
+            format!("limit {limit} probe did not finish within timeout"),
+        ),
+    }
+
     report
 }

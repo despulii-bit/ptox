@@ -140,7 +140,9 @@ in the test suite.
 ## 6. Validate with the conformance suite
 
 `ptox-conformance` checks the contract for you — termination, result shape,
-error shape, attribution, and capability negotiation.
+error shape, attribution, capability negotiation, and that a `limit`-bearing
+query is capped (it sends a probe with a small `limit` and fails you if you emit
+more than that).
 
 For a subprocess (any language):
 
@@ -166,6 +168,7 @@ when any check fails, so it drops straight into CI.
 - [ ] `name()` is stable and non-empty.
 - [ ] `capabilities()` matches what you actually do.
 - [ ] Yields `FileResult`s with at least one `Address`; leaves `provider` empty.
+- [ ] Honors `limit`: a query with a `limit` returns at most that many results.
 - [ ] Unsupported queries yield `unsupported`, not a misleading empty stream.
 - [ ] Failures carry a sensible `ErrorCode` and a secret-free message.
 - [ ] Preserves the untouched upstream payload in `raw` when there is one.

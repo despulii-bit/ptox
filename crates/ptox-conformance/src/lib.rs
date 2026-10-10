@@ -46,3 +46,18 @@ impl Default for Options {
         }
     }
 }
+
+/// The name of the check that verifies a provider honors `limit`.
+pub(crate) const LIMIT_CHECK: &str = "limit_honored";
+
+/// The `limit` carried by the suite's probe query.
+pub(crate) const LIMIT_PROBE: u32 = 1;
+
+/// The probe query used to verify that a provider honors `limit`.
+///
+/// The suite sends it once, separately from [`Options::queries`], and requires
+/// the provider to return at most [`LIMIT_PROBE`] results. A provider that
+/// returns fewer still passes; one that ignores the selector is caught.
+pub(crate) fn limit_probe() -> FileQuery {
+    FileQuery::new("conformance limit probe").with_limit(LIMIT_PROBE)
+}

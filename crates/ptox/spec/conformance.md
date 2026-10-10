@@ -57,6 +57,10 @@ Using `vectors.json`:
    rejected, never allowed to OOM the host.
 3. An output line larger than the host's limit MUST be rejected as `malformed`,
    never buffered without bound.
+4. The provider suite verifies `limit` honoring: it sends a probe query carrying
+   a small `limit` and requires the provider to emit **at most** that many
+   results. A provider MAY return fewer (including none), but one that emits
+   more than `limit` fails the `limit_honored` check.
 
 ## H. Security invariants
 
