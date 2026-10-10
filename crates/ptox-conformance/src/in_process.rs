@@ -91,5 +91,22 @@ pub async fn check_in_process(
         format!("{mismatched} result(s) carried a different provider name"),
     );
 
+    // A provider that declares address schemes must only emit those schemes;
+    // one that declares none is universal. Capabilities are already a typed
+    // value here, so they cannot be malformed.
+    let capabilities = provider.capabilities().await;
+    let undeclared = crate::schemes::undeclared_schemes(&capabilities, &results);
+    report.push(
+        "address_schemes_declared",
+        undeclared.is_empty(),
+        if !undeclared.is_empty() {
+            format!("undeclared scheme(s): {}", undeclared.join(", "))
+        } else if capabilities.schemes.is_empty() {
+            "no schemes declared (universal)".to_owned()
+        } else {
+            format!("{} result(s) within declared schemes", results.len())
+        },
+    );
+
     report
 }

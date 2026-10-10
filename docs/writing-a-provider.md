@@ -90,7 +90,9 @@ you emit. An empty field means "any".
 
 The engine probes capabilities concurrently and skips a provider whose
 capabilities reject the query (the skip is reported in `SearchReport::skipped`).
-Do not declare a facet you don't actually honor.
+Do not declare a facet you don't actually honor. If you declare any `schemes`,
+`ptox-conformance` checks that every address you emit uses one of them; declaring
+none keeps you universal (any scheme accepted).
 
 ## 4. Report failures with the right code
 

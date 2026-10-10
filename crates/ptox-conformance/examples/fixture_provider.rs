@@ -1,13 +1,14 @@
 //! Test fixture provider used by the conformance suite's own tests.
 //!
 //! Usage:
-//! `fixture_provider [good|empty|invalid-json|bad-shape|hang|oversized|crash|capabilities|bad-capabilities]`
+//! `fixture_provider [good|empty|invalid-json|bad-shape|hang|oversized|crash|capabilities|bad-capabilities|scheme-mismatch]`
 //!
 //! Reads one request line and writes NDJSON responses to stdout.
 //!
-//! `capabilities` and `bad-capabilities` only change the answer to a
-//! `capabilities` request; every other mode declines capability negotiation
-//! (answering `done`) and behaves as before for `search`.
+//! `capabilities`, `bad-capabilities`, and `scheme-mismatch` only change the
+//! answer to a `capabilities` request; every other mode declines capability
+//! negotiation (answering `done`) and behaves as before for `search`.
+//! `scheme-mismatch` declares only `magnet` while its `search` emits `https`.
 
 use std::io::{self, BufRead, Write};
 
@@ -37,6 +38,10 @@ fn main() {
                     out,
                     r#"{{"id":1,"result":{{"query":["text","hashes"],"requires":[],"schemes":["https","magnet"]}}}}"#
                 );
+            }
+            "scheme-mismatch" => {
+                // Declares only `magnet`, but search below emits `https`.
+                let _ = writeln!(out, r#"{{"id":1,"result":{{"schemes":["magnet"]}}}}"#);
             }
             "bad-capabilities" => {
                 // `query` must be a list of strings; a bare string is malformed.

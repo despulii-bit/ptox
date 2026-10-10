@@ -44,6 +44,9 @@ Using `vectors.json`:
 
 1. Every `FileResult` has a non-empty `provider` and at least one `Address`.
 2. Every `Address` has a non-empty `scheme` and `uri`.
+3. When a provider declares `Capabilities::schemes`, every emitted `Address`
+   scheme MUST be among them. A provider that declares none is universal and
+   may emit any scheme.
 
 ## G. Limits and hostile output
 

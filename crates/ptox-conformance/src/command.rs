@@ -117,7 +117,9 @@ pub async fn check_command(program: &Path, args: &[String], options: &Options) -
     // Capability negotiation is optional: a provider that declines is treated as
     // universal. One that *does* answer must return a well-formed object.
     let capabilities_timeout = options.timeout.min(Duration::from_secs(2));
-    match probe_capabilities(program, args, capabilities_timeout, options.max_line_bytes).await {
+    let capability_report =
+        probe_capabilities(program, args, capabilities_timeout, options.max_line_bytes).await;
+    match &capability_report {
         CapabilityReport::NotDeclared => report.push(
             "capabilities_well_formed",
             true,
@@ -132,8 +134,36 @@ pub async fn check_command(program: &Path, args: &[String], options: &Options) -
             ),
         ),
         CapabilityReport::Malformed(message) => {
-            report.push("capabilities_well_formed", false, message)
+            report.push("capabilities_well_formed", false, message.clone())
         }
+    }
+
+    // A provider that declares address schemes must only emit those schemes; a
+    // provider that declares none is universal. Malformed capabilities already
+    // failed the check above, so this one is skipped rather than double-counted.
+    match &capability_report {
+        CapabilityReport::Declared(capabilities) => {
+            let undeclared = crate::schemes::undeclared_schemes(capabilities, &results);
+            report.push(
+                "address_schemes_declared",
+                undeclared.is_empty(),
+                if !undeclared.is_empty() {
+                    format!("undeclared scheme(s): {}", undeclared.join(", "))
+                } else if capabilities.schemes.is_empty() {
+                    "no schemes declared (universal)".to_owned()
+                } else {
+                    format!("{} result(s) within declared schemes", results.len())
+                },
+            );
+        }
+        CapabilityReport::NotDeclared => {
+            report.push("address_schemes_declared", true, "not declared (universal)")
+        }
+        CapabilityReport::Malformed(_) => report.push(
+            "address_schemes_declared",
+            true,
+            "skipped (capabilities malformed)",
+        ),
     }
 
     report

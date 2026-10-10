@@ -59,6 +59,15 @@ impl Capabilities {
         used
     }
 
+    /// Whether an emitted address scheme is allowed by this provider.
+    ///
+    /// An empty `schemes` list means "any" (the universal default), so every
+    /// scheme is allowed. Clients and conformance tools use this to check that a
+    /// provider only emits addresses it declared.
+    pub fn allows_scheme(&self, scheme: &str) -> bool {
+        self.schemes.is_empty() || self.schemes.iter().any(|allowed| allowed == scheme)
+    }
+
     /// Whether this provider should be asked a given query.
     pub fn accepts(&self, query: &FileQuery) -> bool {
         let used = Self::used(query);
@@ -112,5 +121,24 @@ mod tests {
         let mut with_type = FileQuery::new("x");
         with_type.mimetypes = Some(vec!["image/*".to_owned()]);
         assert!(!capabilities.accepts(&with_type));
+    }
+
+    #[test]
+    fn scheme_less_is_universal() {
+        let capabilities = Capabilities::universal();
+        assert!(capabilities.allows_scheme("https"));
+        assert!(capabilities.allows_scheme("magnet"));
+        assert!(capabilities.allows_scheme("i2p"));
+    }
+
+    #[test]
+    fn declared_schemes_are_enforced() {
+        let capabilities = Capabilities {
+            schemes: vec!["https".to_owned(), "ipfs".to_owned()],
+            ..Capabilities::default()
+        };
+        assert!(capabilities.allows_scheme("https"));
+        assert!(capabilities.allows_scheme("ipfs"));
+        assert!(!capabilities.allows_scheme("magnet"));
     }
 }

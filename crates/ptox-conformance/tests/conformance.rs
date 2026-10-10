@@ -1,4 +1,5 @@
-use ptox::{Address, FileQuery, FileResult, ResultStream, SearchProvider};
+use async_trait::async_trait;
+use ptox::{Address, Capabilities, FileQuery, FileResult, ResultStream, SearchProvider};
 use ptox_conformance::{check_command, check_in_process, Options};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -123,11 +124,17 @@ async fn undeclared_capabilities_are_universal() {
 
 struct MockProvider {
     name: String,
+    capabilities: Capabilities,
 }
 
+#[async_trait]
 impl SearchProvider for MockProvider {
     fn name(&self) -> &str {
         &self.name
+    }
+
+    async fn capabilities(&self) -> Capabilities {
+        self.capabilities.clone()
     }
 
     fn search(&self, _query: &FileQuery) -> ResultStream<'_> {
@@ -147,7 +154,57 @@ impl SearchProvider for MockProvider {
 async fn in_process_provider_passes() {
     let provider = MockProvider {
         name: "mock".to_owned(),
+        capabilities: Capabilities::universal(),
     };
     let report = check_in_process("mock", &provider, &Options::default()).await;
     assert!(report.passed(), "unexpected failures: {:?}", report.checks);
+}
+
+#[tokio::test]
+async fn in_process_declared_schemes_pass() {
+    let provider = MockProvider {
+        name: "mock".to_owned(),
+        capabilities: Capabilities {
+            schemes: vec!["https".to_owned()],
+            ..Capabilities::default()
+        },
+    };
+    let report = check_in_process("mock", &provider, &Options::default()).await;
+    assert!(report.passed(), "unexpected failures: {:?}", report.checks);
+    assert!(report
+        .checks
+        .iter()
+        .any(|check| check.name == "address_schemes_declared" && check.passed));
+}
+
+#[tokio::test]
+async fn in_process_undeclared_schemes_fail() {
+    let provider = MockProvider {
+        name: "mock".to_owned(),
+        capabilities: Capabilities {
+            schemes: vec!["magnet".to_owned()],
+            ..Capabilities::default()
+        },
+    };
+    let report = check_in_process("mock", &provider, &Options::default()).await;
+    assert!(!report.passed());
+    assert!(report
+        .checks
+        .iter()
+        .any(|check| check.name == "address_schemes_declared" && !check.passed));
+}
+
+#[tokio::test]
+async fn subprocess_undeclared_schemes_fail() {
+    let report = check_command(
+        &fixture_bin(),
+        &mode("scheme-mismatch"),
+        &Options::default(),
+    )
+    .await;
+    assert!(!report.passed());
+    assert!(report
+        .checks
+        .iter()
+        .any(|check| check.name == "address_schemes_declared" && !check.passed));
 }

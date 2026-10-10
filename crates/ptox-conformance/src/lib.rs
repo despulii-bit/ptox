@@ -17,6 +17,7 @@
 mod command;
 mod in_process;
 mod report;
+mod schemes;
 
 pub use command::check_command;
 pub use in_process::check_in_process;

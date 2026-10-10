@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Conformance: emitted address schemes are now cross-checked against declared
+  capabilities. `ptox-conformance` reports an `address_schemes_declared` check
+  (for both in-process and subprocess providers) that fails when a provider
+  declares `Capabilities::schemes` but emits an address outside that set. A
+  provider that declares no schemes stays universal. `Capabilities` gains an
+  `allows_scheme` helper so clients can apply the same rule.
+
 - `FileQuery` builder methods. `FileQuery::new(text)` can now be chained with
   `with_hashes` / `with_hash`, `with_mimetypes` / `with_mimetype`,
   `with_extensions` / `with_extension`, `with_filename`, `with_size_range` /
