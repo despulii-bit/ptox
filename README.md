@@ -97,6 +97,13 @@ cargo run -p ptox-conformance -- -- <provider-command> [args...]
 `crates/ptox-conformance/examples/fixture_provider.rs` is a provider that
 demonstrates the failure modes the suite detects.
 
+## Building a client
+
+A client assembles the SDK — providers in, ranked results and fetched files out.
+The end-to-end walkthrough (engine setup, streaming vs ranked search, partial
+failures, persistence, retrieval, offline testing) is in
+[**docs/building-a-client.md**](docs/building-a-client.md).
+
 ## Configuring a client
 
 Client wiring (which provider commands to run, which schemes to delegate to an

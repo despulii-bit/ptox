@@ -98,6 +98,13 @@ with `SubprocessProvider`. Validate either kind with the `ptox-conformance`
 suite. See `docs/writing-a-provider.md` in the repository for the end-to-end
 guide.
 
+## Building a client
+
+A client assembles the SDK: providers in, ranked results and fetched files out.
+See `docs/building-a-client.md` in the repository for the end-to-end guide —
+engine setup, streaming vs ranked search, partial failures, persistence,
+retrieval, and offline testing.
+
 ## License
 
 Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or
