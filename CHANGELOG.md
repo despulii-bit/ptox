@@ -128,6 +128,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it); `HttpFetcher` reports per-chunk totals, and `CommandFetcher` polls the
   destination file size while its command runs, so command-delegated schemes
   such as magnets report progress too.
+- Property tests for the NDJSON wire boundary. Deterministic pseudo-random
+  bytes and values now drive `parse_line` (never panics, tolerates unknown
+  fields, has fixed `done`/`error`/`result` precedence, survives pathological
+  nesting) and `read_line_bounded` (never returns a line past its bound,
+  round-trips arbitrary/multi-byte UTF-8 split across buffer boundaries, strips
+  CRLF, and rejects invalid UTF-8). No fuzzing dependency is added; the PRNG is
+  a fixed splitmix64 so failures are reproducible.
 
 ## [0.1.3] - 2026-10-10
 
