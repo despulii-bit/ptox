@@ -44,6 +44,8 @@ a data directory with `FileFetcher::with_allowed_roots` (a `file://` address is 
 filesystem read capability, so enabling the feature is a deliberate choice).
 `HttpFetcher::with_retry` can replay transient GET failures (`5xx`, `408`, `429`,
 connection/stream errors) with exponential backoff; retries are off by default.
+`HttpFetcher::with_resume(true)` continues an interrupted `.part` download with a
+`Range` request instead of restarting it.
 Other schemes (e.g. `magnet`) can be delegated to an external command, and
 multiple mirrors of a result are tried in preference order. See
 `docs/fetching.md` in the repository for the end-to-end retrieval guide.

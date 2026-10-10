@@ -2,10 +2,10 @@ use super::{temp_path, verify_sha256, FetchError, FetchRequest, Fetched, Fetcher
 use async_trait::async_trait;
 use futures::StreamExt;
 use sha2::{Digest, Sha256};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// A descriptive default; many hosts (Wikimedia, etc.) reject requests without one.
 const DEFAULT_USER_AGENT: &str = concat!(
@@ -124,6 +124,7 @@ pub struct HttpFetcher {
     client: reqwest::Client,
     schemes: Vec<String>,
     retry: RetryPolicy,
+    resume: bool,
 }
 
 impl HttpFetcher {
@@ -142,6 +143,7 @@ impl HttpFetcher {
             client,
             schemes: vec!["http".to_owned(), "https".to_owned()],
             retry: RetryPolicy::default(),
+            resume: false,
         }
     }
 
@@ -166,6 +168,35 @@ impl HttpFetcher {
     /// The retry policy in effect.
     pub fn retry_policy(&self) -> &RetryPolicy {
         &self.retry
+    }
+
+    /// Enable resuming an interrupted download from `<destination>.part`.
+    ///
+    /// Resuming is **off by default**. When enabled, a `.part` file left by an
+    /// earlier attempt (or an earlier process) is re-hashed and continued with an
+    /// HTTP `Range` request instead of restarting from zero, and a transient
+    /// failure keeps the partial so the next attempt can pick it up. The final
+    /// sha256 still covers the whole file, so verification is unaffected.
+    ///
+    /// A sidecar file (`.part.src`) records which address a partial came from, so
+    /// a resume never splices bytes from two different mirrors. Because a resume
+    /// trusts the saved prefix, it is most useful when the result carries a
+    /// sha256: a corrupt or truncated partial is then rejected at verification.
+    ///
+    /// ```no_run
+    /// use ptox::HttpFetcher;
+    ///
+    /// let fetcher = HttpFetcher::new().with_resume(true);
+    /// assert!(fetcher.resume_enabled());
+    /// ```
+    pub fn with_resume(mut self, resume: bool) -> Self {
+        self.resume = resume;
+        self
+    }
+
+    /// Whether partial-download resuming is enabled.
+    pub fn resume_enabled(&self) -> bool {
+        self.resume
     }
 }
 
@@ -194,6 +225,8 @@ impl Fetcher for HttpFetcher {
         request: &FetchRequest,
         progress: &ProgressFn<'_>,
     ) -> Result<Fetched, FetchError> {
+        let temp = temp_path(&request.destination);
+        let marker = resume_marker_path(&temp);
         let attempts = self.retry.max_attempts();
         // A failed attempt may report bytes before failing; clamp later reports
         // to the high-water mark so a retry never makes progress regress.
@@ -205,19 +238,38 @@ impl Fetcher for HttpFetcher {
             }
         };
 
+        let cleanup = || async {
+            let _ = tokio::fs::remove_file(&temp).await;
+            let _ = tokio::fs::remove_file(&marker).await;
+        };
+
         let mut last_error = None;
         for attempt in 1..=attempts {
             match self.fetch_once(request, &monotonic).await {
                 Ok(fetched) => return Ok(fetched),
                 Err(AttemptError::Transient(error)) if attempt < attempts => {
                     last_error = Some(error);
+                    // With resume on, keep the partial so the next attempt can
+                    // continue it; otherwise start clean.
+                    if !self.resume {
+                        cleanup().await;
+                    }
                     let delay = self.retry.delay_for(attempt);
                     if !delay.is_zero() {
                         tokio::time::sleep(delay).await;
                     }
                 }
-                Err(AttemptError::Transient(error)) | Err(AttemptError::Permanent(error)) => {
-                    return Err(error)
+                Err(AttemptError::Transient(error)) => {
+                    if !self.resume {
+                        cleanup().await;
+                    }
+                    return Err(error);
+                }
+                Err(AttemptError::Permanent(error)) => {
+                    // A bad request, hash mismatch, or disk error cannot be fixed
+                    // by resuming, so never leave the partial behind.
+                    cleanup().await;
+                    return Err(error);
                 }
             }
         }
@@ -227,20 +279,72 @@ impl Fetcher for HttpFetcher {
 
 impl HttpFetcher {
     /// Perform one HTTP GET + download, classifying failures as transient or
-    /// permanent for the retry loop. Removes the `.part` file on any failure, so
-    /// a retry starts from a clean destination.
+    /// permanent for the retry loop.
+    ///
+    /// When [`HttpFetcher::with_resume`] is on, an interrupted
+    /// `<destination>.part` left by an earlier attempt (or an earlier process) is
+    /// continued with a `Range` request instead of being restarted. Cleanup of
+    /// the partial on failure is handled by [`Fetcher::fetch_with_progress`], so
+    /// the retry loop can choose to keep it for a later resume.
     async fn fetch_once(
         &self,
         request: &FetchRequest,
         progress: &ProgressFn<'_>,
     ) -> Result<Fetched, AttemptError> {
-        let response = self
-            .client
-            .get(&request.address.uri)
+        let temp = temp_path(&request.destination);
+        let marker = resume_marker_path(&temp);
+
+        // Decide the resume point before the request: the saved prefix must be
+        // re-hashed to keep the final sha256 correct, and a prefix that cannot be
+        // re-read means starting over from zero.
+        let mut resume_from = if self.resume {
+            resumable_prefix(&temp, &marker, &request.address.uri).await
+        } else {
+            0
+        };
+        let mut hasher = Sha256::new();
+        if resume_from > 0 {
+            match hash_prefix(&temp, resume_from, &mut hasher).await {
+                Ok(()) => {}
+                Err(_) => {
+                    resume_from = 0;
+                    hasher = Sha256::new();
+                }
+            }
+        }
+        if self.resume && resume_from == 0 {
+            // A fresh partial: record the source now so a crash mid-download can
+            // be resumed, and drop any stale partial from another address.
+            let _ = tokio::fs::remove_file(&temp).await;
+            tokio::fs::write(&marker, &request.address.uri)
+                .await
+                .map_err(|error| AttemptError::Permanent(FetchError::Io(error)))?;
+        }
+
+        let mut builder = self.client.get(&request.address.uri);
+        if resume_from > 0 {
+            builder = builder.header(reqwest::header::RANGE, format!("bytes={resume_from}-"));
+        }
+        let response = builder
             .send()
             .await
             .map_err(|error| AttemptError::Transient(FetchError::Network(error.to_string())))?;
         let status = response.status();
+
+        // A complete partial: the server refuses the range because there is
+        // nothing left to send. Verify what we already have and finish it.
+        if resume_from > 0 && status == reqwest::StatusCode::RANGE_NOT_SATISFIABLE {
+            if let Some(total) = content_range_total(response.headers()) {
+                if resume_from >= total {
+                    return finish_partial(request, &temp, &marker, resume_from, hasher).await;
+                }
+            }
+            return Err(AttemptError::Permanent(FetchError::Network(format!(
+                "HTTP {status} for {}",
+                request.address.uri
+            ))));
+        }
+
         if !status.is_success() {
             let error = FetchError::Network(format!("HTTP {status} for {}", request.address.uri));
             return Err(if is_transient_status(status) {
@@ -250,36 +354,89 @@ impl HttpFetcher {
             });
         }
 
-        let temp = temp_path(&request.destination);
-        match download(response, &temp, request, progress).await {
-            Ok(fetched) => Ok(fetched),
-            Err(error) => {
-                // Never leave a partial download behind; the next attempt (if
-                // any) recreates the file from scratch.
-                let _ = tokio::fs::remove_file(&temp).await;
-                Err(match error {
-                    network @ FetchError::Network(_) => AttemptError::Transient(network),
-                    other => AttemptError::Permanent(other),
-                })
+        // Append only when the server honored the exact range we asked for. A
+        // `200` (range ignored, or no range requested) restarts from zero; a
+        // mismatched `206` is rejected rather than silently truncating.
+        let appending = resume_from > 0
+            && status == reqwest::StatusCode::PARTIAL_CONTENT
+            && content_range_start(response.headers()) == Some(resume_from);
+        if resume_from > 0 && status == reqwest::StatusCode::PARTIAL_CONTENT && !appending {
+            return Err(AttemptError::Permanent(FetchError::Network(format!(
+                "unexpected Content-Range for a range request on {}",
+                request.address.uri
+            ))));
+        }
+        let (hasher, total) = if appending {
+            (hasher, resume_from)
+        } else {
+            (Sha256::new(), 0)
+        };
+
+        match download(response, &temp, request, progress, hasher, total, appending).await {
+            Ok(fetched) => {
+                if self.resume {
+                    let _ = tokio::fs::remove_file(&marker).await;
+                }
+                Ok(fetched)
             }
+            Err(error) => Err(match error {
+                network @ FetchError::Network(_) => AttemptError::Transient(network),
+                other => AttemptError::Permanent(other),
+            }),
         }
     }
 }
 
+/// Verify and rename a partial the server reports as already complete.
+async fn finish_partial(
+    request: &FetchRequest,
+    temp: &Path,
+    marker: &Path,
+    bytes: u64,
+    hasher: Sha256,
+) -> Result<Fetched, AttemptError> {
+    let digest = hex::encode(hasher.finalize());
+    verify_sha256(request.expected_sha256.as_deref(), &digest).map_err(AttemptError::Permanent)?;
+    tokio::fs::rename(temp, &request.destination)
+        .await
+        .map_err(|error| AttemptError::Permanent(FetchError::Io(error)))?;
+    let _ = tokio::fs::remove_file(marker).await;
+    Ok(Fetched {
+        path: request.destination.clone(),
+        bytes,
+        sha256: Some(digest),
+        address: request.address.clone(),
+    })
+}
+
 /// Stream `response` to `temp`, verify its hash, then rename it into place.
+///
+/// `hasher` and `total` may carry a pre-hashed prefix when resuming; `append`
+/// selects appending to an existing `temp` instead of truncating it.
 async fn download(
     response: reqwest::Response,
     temp: &Path,
     request: &FetchRequest,
     progress: &ProgressFn<'_>,
+    mut hasher: Sha256,
+    mut total: u64,
+    append: bool,
 ) -> Result<Fetched, FetchError> {
     if let Some(parent) = temp.parent() {
         tokio::fs::create_dir_all(parent).await?;
     }
-    let mut file = tokio::fs::File::create(temp).await?;
-    let mut hasher = Sha256::new();
+    let mut file = if append {
+        tokio::fs::OpenOptions::new()
+            .append(true)
+            .open(temp)
+            .await?
+    } else {
+        tokio::fs::File::create(temp).await?
+    };
+    if total > 0 {
+        progress(total);
+    }
     let mut stream = response.bytes_stream();
-    let mut total = 0u64;
 
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|error| FetchError::Network(error.to_string()))?;
@@ -300,6 +457,66 @@ async fn download(
         sha256: Some(digest),
         address: request.address.clone(),
     })
+}
+
+/// `<destination>.part.src`: records which address a partial download came from,
+/// so a resume never splices bytes from two different mirrors.
+fn resume_marker_path(temp: &Path) -> PathBuf {
+    let mut name = temp.as_os_str().to_os_string();
+    name.push(".src");
+    PathBuf::from(name)
+}
+
+/// The number of bytes of `temp` that may be resumed, or `0` when there is no
+/// partial matching `uri`.
+async fn resumable_prefix(temp: &Path, marker: &Path, uri: &str) -> u64 {
+    let Ok(recorded) = tokio::fs::read_to_string(marker).await else {
+        return 0;
+    };
+    if recorded.trim() != uri {
+        return 0;
+    }
+    match tokio::fs::metadata(temp).await {
+        Ok(metadata) if metadata.is_file() => metadata.len(),
+        _ => 0,
+    }
+}
+
+/// Feed the first `len` bytes of `path` into `hasher` so a resumed download's
+/// final digest covers the whole file.
+async fn hash_prefix(path: &Path, len: u64, hasher: &mut Sha256) -> std::io::Result<()> {
+    let mut file = tokio::fs::File::open(path).await?;
+    let mut remaining = len;
+    let mut buffer = vec![0u8; 64 * 1024];
+    while remaining > 0 {
+        let want = remaining.min(buffer.len() as u64) as usize;
+        let read = file.read(&mut buffer[..want]).await?;
+        if read == 0 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                "partial file shrank while resuming",
+            ));
+        }
+        hasher.update(&buffer[..read]);
+        remaining -= read as u64;
+    }
+    Ok(())
+}
+
+/// The start offset of a `Content-Range: bytes <start>-<end>/<total>` header.
+fn content_range_start(headers: &reqwest::header::HeaderMap) -> Option<u64> {
+    let value = headers.get(reqwest::header::CONTENT_RANGE)?.to_str().ok()?;
+    let rest = value.trim().strip_prefix("bytes")?.trim_start();
+    let (range, _total) = rest.split_once('/')?;
+    let (start, _end) = range.split_once('-')?;
+    start.trim().parse().ok()
+}
+
+/// The total size in a `Content-Range` header (a `416` sends `bytes */<total>`).
+fn content_range_total(headers: &reqwest::header::HeaderMap) -> Option<u64> {
+    let value = headers.get(reqwest::header::CONTENT_RANGE)?.to_str().ok()?;
+    let (_range, total) = value.trim().rsplit_once('/')?;
+    total.trim().parse().ok()
 }
 
 #[cfg(test)]
@@ -346,5 +563,52 @@ mod tests {
         ] {
             assert!(!is_transient_status(status), "{status} should be permanent");
         }
+    }
+
+    #[test]
+    fn resume_is_off_by_default() {
+        assert!(!HttpFetcher::new().resume_enabled());
+        assert!(HttpFetcher::new().with_resume(true).resume_enabled());
+    }
+
+    #[test]
+    fn parses_content_range_start_and_total() {
+        use reqwest::header::{HeaderMap, HeaderValue, CONTENT_RANGE};
+        let mut headers = HeaderMap::new();
+        headers.insert(CONTENT_RANGE, HeaderValue::from_static("bytes 5-99/1000"));
+        assert_eq!(content_range_start(&headers), Some(5));
+        assert_eq!(content_range_total(&headers), Some(1000));
+
+        headers.insert(CONTENT_RANGE, HeaderValue::from_static("bytes */1000"));
+        assert_eq!(content_range_start(&headers), None);
+        assert_eq!(content_range_total(&headers), Some(1000));
+
+        headers.insert(CONTENT_RANGE, HeaderValue::from_static("nonsense"));
+        assert_eq!(content_range_start(&headers), None);
+        assert_eq!(content_range_total(&headers), None);
+    }
+
+    #[tokio::test]
+    async fn resume_marker_must_match_a_readable_partial() {
+        let dir = std::env::temp_dir().join(format!("ptox-resume-unit-{}", std::process::id()));
+        tokio::fs::create_dir_all(&dir).await.expect("mkdir");
+        let temp = dir.join("file.part");
+        let marker = resume_marker_path(&temp);
+        assert_eq!(marker, dir.join("file.part.src"));
+
+        // No marker yet.
+        tokio::fs::write(&temp, b"hello").await.expect("write");
+        assert_eq!(resumable_prefix(&temp, &marker, "https://a/x").await, 0);
+
+        // Matching source and partial.
+        tokio::fs::write(&marker, "https://a/x")
+            .await
+            .expect("marker");
+        assert_eq!(resumable_prefix(&temp, &marker, "https://a/x").await, 5);
+
+        // A different source must not resume another mirror's bytes.
+        assert_eq!(resumable_prefix(&temp, &marker, "https://b/x").await, 0);
+
+        let _ = tokio::fs::remove_dir_all(&dir).await;
     }
 }

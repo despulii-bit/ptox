@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `fetch`: opt-in resuming of interrupted HTTP downloads.
+  `HttpFetcher::with_resume(true)` re-hashes an existing `<destination>.part`
+  and continues it with a `Range` request instead of restarting: it validates
+  `Content-Range`, ignores servers that disregard the range (`200`), and
+  finishes a partial the server reports as already complete (`416`). A transient
+  failure keeps the partial, so a retry or a later process resumes instead of
+  throwing bytes away, and the final sha256 still covers the whole file. A
+  `<destination>.part.src` sidecar records the source address so two mirrors
+  never splice. Off by default, like `RetryPolicy`.
+
 - `fetch`: an opt-in `file://` fetcher. A new `FileFetcher` (behind the
   **off-by-default** `file` feature) copies a local file to the destination with
   the same guarantees as the HTTP fetcher — a `.part` file, a streamed sha256,

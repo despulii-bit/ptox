@@ -127,7 +127,9 @@ runs the same sequence:
 
 Because the rename is atomic and the `.part` file is removed on failure, a
 destination path never contains a half-written download. A hash mismatch leaves
-no file behind.
+no file behind. With `HttpFetcher::with_resume(true)` a partial is instead kept
+and continued on the next attempt (see [Resuming interrupted
+downloads](#resuming-interrupted-downloads)).
 
 `FetchRegistry::fetch_merged` / `Engine::fetch` derive the expected hash from
 the result's `sha256` (falling back to the address's own `sha256`), so a result
@@ -364,6 +366,36 @@ starts from a clean `.part` file (partials are removed on failure), and progress
 stays monotonic across retries. A custom `RetryPolicy` can also be attached to an
 `IpfsGatewayFetcher` via `IpfsGatewayFetcher::with_http_fetcher`.
 
+## Resuming interrupted downloads
+
+A large download that dies part-way normally starts over. Opt in with
+`HttpFetcher::with_resume(true)` to continue it instead:
+
+```rust
+use ptox::HttpFetcher;
+
+let fetcher = HttpFetcher::new().with_resume(true);
+```
+
+When a fetch starts, `HttpFetcher` looks for `<destination>.part`. If one exists
+and its `.part.src` sidecar records the same address, the saved prefix is
+re-hashed and the rest is requested with `Range: bytes=<len>-`:
+
+- a `206 Partial Content` with a matching `Content-Range` is appended to the
+  partial;
+- a `200 OK` (the server ignored the range) restarts from zero;
+- a `416 Range Not Satisfiable` means the partial is already the whole file, so
+  it is verified and renamed into place.
+
+A transient failure keeps the partial (instead of deleting it), so the retry
+loop, or a later process using the same destination, continues where it left
+off. Resume is **off by default** because it trusts the saved prefix. Two things
+keep it honest: the `.part.src` sidecar means bytes from two mirrors are never
+spliced, and when `expected_sha256` is known the final digest is checked over
+the **whole** file, so a corrupt partial is rejected rather than exposed. The
+prefix is re-read and hashed, so resuming costs one pass over the bytes already
+on disk.
+
 ## Writing your own fetcher
 
 Implement `Fetcher` for a new protocol and register it. Keep the same
@@ -434,6 +466,8 @@ fetchers.
 - [ ] `file://` is enabled only for trusted/local providers, preferably with
       `FileFetcher::with_allowed_roots`.
 - [ ] Transient HTTP failures are retried only when opted in.
+- [ ] Long downloads can be resumed (`HttpFetcher::with_resume`) or are cheap to
+      restart.
 
 ## See also
 

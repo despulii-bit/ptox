@@ -116,6 +116,138 @@ fn retrying_registry(attempts: u32) -> FetchRegistry {
     registry
 }
 
+/// An `HttpFetcher` registry with resuming enabled.
+fn resuming_registry() -> FetchRegistry {
+    let mut registry = FetchRegistry::new();
+    registry.register(Arc::new(HttpFetcher::new().with_resume(true)));
+    registry
+}
+
+/// The `.part` and `.part.src` paths for a destination.
+fn partial_paths(dest: &std::path::Path) -> (PathBuf, PathBuf) {
+    let name = dest
+        .file_name()
+        .expect("file name")
+        .to_string_lossy()
+        .into_owned();
+    let part = dest.with_file_name(format!("{name}.part"));
+    let marker = dest.with_file_name(format!("{name}.part.src"));
+    (part, marker)
+}
+
+type SeenRanges = Arc<std::sync::Mutex<Vec<Option<String>>>>;
+
+/// Serve one range-capable reply for an already-accepted connection.
+async fn handle_range_connection(
+    mut socket: tokio::net::TcpStream,
+    body: &'static [u8],
+    seen: &SeenRanges,
+) {
+    let mut buffer = Vec::new();
+    let mut chunk = [0u8; 1024];
+    loop {
+        match socket.read(&mut chunk).await {
+            Ok(0) | Err(_) => break,
+            Ok(read) => buffer.extend_from_slice(&chunk[..read]),
+        }
+        if buffer.windows(4).any(|window| window == b"\r\n\r\n") {
+            break;
+        }
+    }
+    let request = String::from_utf8_lossy(&buffer);
+    let range = request.lines().find_map(|line| {
+        let (name, value) = line.split_once(':')?;
+        name.trim()
+            .eq_ignore_ascii_case("range")
+            .then(|| value.trim().to_owned())
+    });
+    seen.lock().expect("lock").push(range.clone());
+
+    let start = range
+        .as_deref()
+        .and_then(|value| value.strip_prefix("bytes="))
+        .and_then(|value| value.split_once('-').map(|(start, _)| start))
+        .and_then(|start| start.trim().parse::<usize>().ok())
+        .unwrap_or(0);
+
+    if start >= body.len() {
+        let response = format!(
+            "HTTP/1.1 416 Range Not Satisfiable\r\nContent-Range: bytes */{}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            body.len()
+        );
+        let _ = socket.write_all(response.as_bytes()).await;
+        let _ = socket.flush().await;
+        return;
+    }
+
+    let payload = &body[start..];
+    let header = if start > 0 {
+        format!(
+            "HTTP/1.1 206 Partial Content\r\nContent-Range: bytes {start}-{}/{}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            body.len() - 1,
+            body.len(),
+            payload.len()
+        )
+    } else {
+        format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            payload.len()
+        )
+    };
+    let _ = socket.write_all(header.as_bytes()).await;
+    let _ = socket.write_all(payload).await;
+    let _ = socket.flush().await;
+}
+
+/// A server that honors `Range` requests and records each requested range.
+async fn serve_ranges(body: &'static [u8]) -> (String, SeenRanges) {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind");
+    let addr = listener.local_addr().expect("addr");
+    let seen: SeenRanges = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let recorded = seen.clone();
+    tokio::spawn(async move {
+        while let Ok((socket, _)) = listener.accept().await {
+            handle_range_connection(socket, body, &recorded).await;
+        }
+    });
+    (format!("http://{addr}/file"), seen)
+}
+
+/// A server whose first connection promises `body` but sends only
+/// `first_bytes`, then closes; later connections honor `Range`. Lets a test
+/// exercise a transient failure followed by a resume.
+async fn serve_truncated_then_resumable(
+    body: &'static [u8],
+    first_bytes: usize,
+) -> (String, SeenRanges) {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind");
+    let addr = listener.local_addr().expect("addr");
+    let seen: SeenRanges = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let recorded = seen.clone();
+    tokio::spawn(async move {
+        if let Ok((mut socket, _)) = listener.accept().await {
+            let mut buffer = [0u8; 2048];
+            let _ = socket.read(&mut buffer).await;
+            let header = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            );
+            let _ = socket.write_all(header.as_bytes()).await;
+            let _ = socket.write_all(&body[..first_bytes]).await;
+            let _ = socket.flush().await;
+            recorded.lock().expect("lock").push(None);
+        }
+        while let Ok((socket, _)) = listener.accept().await {
+            handle_range_connection(socket, body, &recorded).await;
+        }
+    });
+    (format!("http://{addr}/file"), seen)
+}
+
 fn temp_dest(tag: &str) -> PathBuf {
     std::env::temp_dir().join(format!("ptox-fetch-{}-{tag}", std::process::id()))
 }
@@ -349,6 +481,186 @@ async fn http_retry_resets_a_partial_download() {
     assert_eq!(fetched.bytes, body.len() as u64);
     assert_eq!(std::fs::read(&dest).expect("read"), body);
     assert_eq!(hits.load(Ordering::SeqCst), 2);
+    let _ = std::fs::remove_file(&dest);
+}
+
+#[tokio::test]
+async fn http_resume_continues_a_matching_partial() {
+    let body: &'static [u8] = b"the whole payload, resumed from a partial prefix";
+    let (url, seen) = serve_ranges(body).await;
+    let dest = temp_dest("resume-matching");
+    let (part, marker) = partial_paths(&dest);
+    let prefix = 10usize;
+    std::fs::write(&part, &body[..prefix]).expect("seed partial");
+    std::fs::write(&marker, &url).expect("seed marker");
+
+    let fetched = resuming_registry()
+        .fetch(
+            &Address::new("http", url),
+            dest.clone(),
+            Some(sha256_hex(body)),
+        )
+        .await
+        .expect("resume succeeds");
+
+    assert_eq!(fetched.bytes, body.len() as u64);
+    assert_eq!(std::fs::read(&dest).expect("read"), body);
+    assert_eq!(
+        seen.lock().expect("lock").first().cloned().flatten(),
+        Some(format!("bytes={prefix}-"))
+    );
+    assert!(!part.exists(), "partial must be renamed away");
+    assert!(!marker.exists(), "marker must be removed on success");
+    let _ = std::fs::remove_file(&dest);
+}
+
+#[tokio::test]
+async fn http_resume_restarts_when_the_server_ignores_range() {
+    let body: &'static [u8] = b"full body sent even though a range was asked";
+    let url = serve_once(body).await;
+    let dest = temp_dest("resume-ignored-range");
+    let (part, marker) = partial_paths(&dest);
+    std::fs::write(&part, b"stale prefix").expect("seed partial");
+    std::fs::write(&marker, &url).expect("seed marker");
+
+    let fetched = resuming_registry()
+        .fetch(
+            &Address::new("http", url),
+            dest.clone(),
+            Some(sha256_hex(body)),
+        )
+        .await
+        .expect("a 200 is written from scratch");
+
+    assert_eq!(fetched.bytes, body.len() as u64);
+    assert_eq!(std::fs::read(&dest).expect("read"), body);
+    assert!(!part.exists());
+    assert!(!marker.exists());
+    let _ = std::fs::remove_file(&dest);
+}
+
+#[tokio::test]
+async fn http_resume_is_off_unless_enabled() {
+    let body: &'static [u8] = b"the partial must be ignored by default";
+    let url = serve_once(body).await;
+    let dest = temp_dest("resume-off");
+    let (part, marker) = partial_paths(&dest);
+    std::fs::write(&part, b"ignored prefix").expect("seed partial");
+    std::fs::write(&marker, &url).expect("seed marker");
+
+    let fetched = FetchRegistry::with_defaults()
+        .fetch(
+            &Address::new("http", url),
+            dest.clone(),
+            Some(sha256_hex(body)),
+        )
+        .await
+        .expect("default fetch overwrites the partial");
+
+    assert_eq!(fetched.bytes, body.len() as u64);
+    assert_eq!(std::fs::read(&dest).expect("read"), body);
+    assert!(!part.exists());
+    let _ = std::fs::remove_file(&dest);
+}
+
+#[tokio::test]
+async fn http_retry_resumes_a_kept_partial_from_the_same_address() {
+    let body: &'static [u8] = b"recovered by resuming the kept prefix";
+    let (url, seen) = serve_truncated_then_resumable(body, 7).await;
+    let dest = temp_dest("resume-after-retry");
+    let mut registry = FetchRegistry::new();
+    registry.register(Arc::new(
+        HttpFetcher::new()
+            .with_resume(true)
+            .with_retry(RetryPolicy::new(2).with_base_delay(Duration::ZERO)),
+    ));
+    let progress = std::sync::Mutex::new(Vec::new());
+
+    let fetched = registry
+        .fetch_with_progress(
+            &Address::new("http", url),
+            dest.clone(),
+            Some(sha256_hex(body)),
+            &|bytes| progress.lock().expect("lock").push(bytes),
+        )
+        .await
+        .expect("second attempt resumes");
+
+    assert_eq!(fetched.bytes, body.len() as u64);
+    assert_eq!(std::fs::read(&dest).expect("read"), body);
+    assert_eq!(
+        seen.lock().expect("lock").get(1).cloned().flatten(),
+        Some("bytes=7-".to_owned()),
+        "the retry must ask for the kept prefix"
+    );
+    let progress = progress.into_inner().expect("inner");
+    assert!(
+        progress.windows(2).all(|pair| pair[0] <= pair[1]),
+        "progress must be monotonic: {progress:?}"
+    );
+    assert_eq!(progress.last().copied(), Some(body.len() as u64));
+    let _ = std::fs::remove_file(&dest);
+}
+
+#[tokio::test]
+async fn http_resume_finishes_an_already_complete_partial() {
+    let body: &'static [u8] = b"this partial is already the whole file";
+    let (url, seen) = serve_ranges(body).await;
+    let dest = temp_dest("resume-complete");
+    let (part, marker) = partial_paths(&dest);
+    std::fs::write(&part, body).expect("seed complete partial");
+    std::fs::write(&marker, &url).expect("seed marker");
+
+    let fetched = resuming_registry()
+        .fetch(
+            &Address::new("http", url),
+            dest.clone(),
+            Some(sha256_hex(body)),
+        )
+        .await
+        .expect("416 completes the partial");
+
+    assert_eq!(fetched.bytes, body.len() as u64);
+    assert_eq!(std::fs::read(&dest).expect("read"), body);
+    assert_eq!(
+        seen.lock().expect("lock").first().cloned().flatten(),
+        Some(format!("bytes={}-", body.len()))
+    );
+    assert!(!part.exists());
+    assert!(!marker.exists());
+    let _ = std::fs::remove_file(&dest);
+}
+
+#[tokio::test]
+async fn http_resume_does_not_splice_two_mirrors() {
+    let first_body: &'static [u8] = b"first mirror's incomplete data";
+    let second_body: &'static [u8] = b"the second mirror's complete data";
+    let (url_a, _) = serve_truncated_then_resumable(first_body, 6).await;
+    let url_b = serve_once(second_body).await;
+    let dest = temp_dest("resume-failover");
+
+    let result = ptox::merge(
+        [ptox::FileResult::new(
+            "provider",
+            vec![Address::new("http", url_a), Address::new("http", url_b)],
+        )],
+        &ptox::MergeOptions::default(),
+    )
+    .into_iter()
+    .next()
+    .expect("one result");
+
+    let fetched = resuming_registry()
+        .fetch_merged(&result, dest.clone())
+        .await
+        .expect("second mirror succeeds");
+
+    assert_eq!(fetched.bytes, second_body.len() as u64);
+    assert_eq!(
+        std::fs::read(&dest).expect("read"),
+        second_body,
+        "the second mirror must not inherit the first's partial"
+    );
     let _ = std::fs::remove_file(&dest);
 }
 
