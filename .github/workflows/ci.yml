@@ -50,6 +50,20 @@ jobs:
       - name: Publish dry-run
         run: cargo publish --dry-run -p ptox
 
+  docs:
+    name: rustdoc
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Broken intra-doc links and missing docs are build failures.
+      - name: Rustdoc
+        run: RUSTDOCFLAGS="-D warnings" cargo doc --workspace --all-features --no-deps
+
   msrv:
     name: MSRV (${{ matrix.rust }})
     runs-on: ubuntu-latest

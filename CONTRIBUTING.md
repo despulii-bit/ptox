@@ -131,6 +131,13 @@ a separate private repo. Don't commit `AGENTS.md`, `.pi/`, `.agents/`,
 - Update the spec and `vectors.json` if behavior changes.
 - Don't force-push to `main`.
 
+## Reporting bugs and security issues
+
+Open an issue for ordinary bugs and provider proposals. For anything that breaks
+a ptox security invariant (bounded parsing, result validation, retrieval
+integrity, `file://` containment), report it privately — see
+[SECURITY.md](SECURITY.md).
+
 ## License
 
 By contributing, you agree that your contributions are dual-licensed under

@@ -6,7 +6,7 @@
 //! - **Contracts** — [`types`] (`FileQuery`, `FileResult`, `Address`, …), the
 //!   [`search::SearchProvider`] trait, and the [`fetch::Fetcher`] trait.
 //! - **Engines** — [`search::fanout`], the [`fetch::FetchRegistry`], and the
-//!   [`merge`] post-processor.
+//!   [`merge`](fn@merge) post-processor.
 //! - **Tooling** — the NDJSON [`provider`] bridge (the conformance suite is the
 //!   separate `ptox-conformance` crate).
 //!

@@ -86,7 +86,7 @@ const READ_CHUNK: usize = 64 * 1024;
 /// Resolves `file://` addresses by copying a local file to the destination.
 ///
 /// Writes atomically, verifies sha256, and reports cumulative progress per
-/// chunk. See the [module docs](self) for the local-file policy.
+/// chunk. See `docs/fetching.md` for the local-file policy.
 pub struct FileFetcher {
     schemes: Vec<String>,
     allowed_roots: Option<Vec<PathBuf>>,
@@ -95,7 +95,7 @@ pub struct FileFetcher {
 impl FileFetcher {
     /// A fetcher that may read **any** path the process can read.
     ///
-    /// Convenient for local/scratch providers; see the [module docs](self) and
+    /// Convenient for local/scratch providers; see `docs/fetching.md` and
     /// prefer [`FileFetcher::with_allowed_roots`] when a data directory is known.
     pub fn new() -> Self {
         Self {

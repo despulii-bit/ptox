@@ -1,6 +1,6 @@
 //! The high-level entry point: providers in, ranked results and fetched files out.
 //!
-//! [`Engine`] bundles the search pipeline ([`crate::fanout`] + [`crate::merge`]) and,
+//! [`Engine`] bundles the search pipeline ([`crate::fanout`] + [`crate::merge`](mod@crate::merge)) and,
 //! with the `fetch` feature, retrieval. A client is then a few lines:
 //!
 //! ```no_run
@@ -114,7 +114,7 @@ impl Engine {
         self
     }
 
-    /// Set per-provider ranking weights, as consumed by [`crate::merge`].
+    /// Set per-provider ranking weights, as consumed by [`crate::merge`](fn@crate::merge).
     pub fn with_weights(mut self, provider_weights: HashMap<String, f64>) -> Self {
         self.provider_weights = provider_weights;
         self

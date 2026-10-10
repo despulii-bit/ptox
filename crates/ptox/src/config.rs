@@ -138,7 +138,7 @@ pub struct CommandConfig {
 /// Ranking policy.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct RankingConfig {
-    /// Per-provider weight (default `1.0` in [`crate::merge`]).
+    /// Per-provider weight (default `1.0` in [`crate::merge`](fn@crate::merge)).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub weights: BTreeMap<String, f64>,
 }
@@ -346,7 +346,7 @@ impl Config {
             .collect()
     }
 
-    /// The ranking policy as [`MergeOptions`] for [`crate::merge`] /
+    /// The ranking policy as [`MergeOptions`] for [`crate::merge`](fn@crate::merge) /
     /// [`crate::Engine::with_weights`].
     pub fn merge_options(&self) -> MergeOptions {
         MergeOptions {
