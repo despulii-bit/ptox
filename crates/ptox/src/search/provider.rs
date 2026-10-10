@@ -23,6 +23,16 @@ pub trait SearchProvider: Send + Sync {
         Capabilities::universal()
     }
 
+    /// Drop any internally cached [`SearchProvider::capabilities`] so the next
+    /// call re-probes.
+    ///
+    /// The default is a no-op. Implement this only if you cache capabilities
+    /// internally and they can change over the provider's lifetime; the engine
+    /// calls it from [`crate::Engine::invalidate_capabilities`]. The engine's
+    /// own opt-in capability cache is cleared separately and does not require
+    /// this hook.
+    fn invalidate_capabilities(&self) {}
+
     /// Stream results for `query`. Errors are per-item, never global.
     fn search(&self, query: &FileQuery) -> ResultStream<'_>;
 }

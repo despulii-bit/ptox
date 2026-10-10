@@ -11,6 +11,7 @@ It has three parts:
   `Address`, `SearchProvider`, `Fetcher`, `Capabilities`.
 - **Engines** — the high-level [`Engine`](crates/ptox/src/engine.rs), the search
   fan-out engine, the retrieval engine, and the merge/rank post-processor.
+  Capability probing is concurrent and can be memoized per engine.
 - **Tooling** — the conformance suite and the wire schema.
 
 It does **not** include networks or user interfaces. Those are built on top:
@@ -150,7 +151,7 @@ Private, pre-release. Contract **v2** locked (with a JSON Schema). The SDK is a
 single `ptox` crate with `types` / `search` / `provider` / `fetch` modules (fetch
 behind a feature); the conformance suite is the `ptox-conformance` crate.
 Providers, clients, ranking policy, and indexing are separate; the SDK supplies a
-default merge/rank. 158 tests green.
+default merge/rank. 163 tests green.
 
 ## Contributing
 

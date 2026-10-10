@@ -5,6 +5,7 @@ use ptox::{
     SearchProvider,
 };
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 struct Mock {
@@ -61,6 +62,52 @@ impl SearchProvider for HashOnly {
     }
 }
 
+/// Counts how often its capabilities are computed and invalidated.
+struct Counting {
+    calls: Arc<AtomicUsize>,
+    invalidations: Arc<AtomicUsize>,
+}
+
+impl Counting {
+    fn new() -> (Self, Arc<AtomicUsize>, Arc<AtomicUsize>) {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let invalidations = Arc::new(AtomicUsize::new(0));
+        (
+            Self {
+                calls: calls.clone(),
+                invalidations: invalidations.clone(),
+            },
+            calls,
+            invalidations,
+        )
+    }
+}
+
+#[async_trait]
+impl SearchProvider for Counting {
+    fn name(&self) -> &str {
+        "counting"
+    }
+
+    async fn capabilities(&self) -> Capabilities {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        Capabilities {
+            query: vec!["text".to_owned()],
+            ..Capabilities::default()
+        }
+    }
+
+    fn invalidate_capabilities(&self) {
+        self.invalidations.fetch_add(1, Ordering::SeqCst);
+    }
+
+    fn search(&self, _query: &FileQuery) -> ResultStream<'_> {
+        Box::pin(async_stream::stream! {
+            yield Ok(FileResult::new("counting", vec![Address::new("https", "https://x/f")]));
+        })
+    }
+}
+
 fn result(provider: &str, sha: &str) -> FileResult {
     let mut result = FileResult::new(
         provider,
@@ -70,6 +117,65 @@ fn result(provider: &str, sha: &str) -> FileResult {
     result.size = Some(10);
     result.hashes = Some(HashMap::from([("sha256".to_owned(), sha.to_owned())]));
     result
+}
+
+#[tokio::test]
+async fn capability_cache_is_opt_in_and_avoids_reprobing() {
+    // Without the cache, capabilities are computed once per search.
+    let (provider, calls, _) = Counting::new();
+    let engine = Engine::new(vec![Arc::new(provider) as Arc<dyn SearchProvider>]);
+    engine.search(FileQuery::new("x")).await;
+    engine.search(FileQuery::new("x")).await;
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+
+    // With the cache, the second search reuses the first answer.
+    let (provider, calls, _) = Counting::new();
+    let engine =
+        Engine::new(vec![Arc::new(provider) as Arc<dyn SearchProvider>]).with_capability_cache();
+    engine.search(FileQuery::new("x")).await;
+    engine.search(FileQuery::new("x")).await;
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn search_stream_also_uses_the_capability_cache() {
+    let (provider, calls, _) = Counting::new();
+    let engine =
+        Engine::new(vec![Arc::new(provider) as Arc<dyn SearchProvider>]).with_capability_cache();
+
+    let mut stream = Box::pin(engine.search_stream(FileQuery::new("x")).await);
+    while stream.next().await.is_some() {}
+    let mut stream = Box::pin(engine.search_stream(FileQuery::new("x")).await);
+    while stream.next().await.is_some() {}
+
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn invalidate_capabilities_reprobes_and_delegates_to_providers() {
+    let (provider, calls, invalidations) = Counting::new();
+    let engine =
+        Engine::new(vec![Arc::new(provider) as Arc<dyn SearchProvider>]).with_capability_cache();
+
+    engine.search(FileQuery::new("x")).await;
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+
+    engine.invalidate_capabilities();
+    assert_eq!(invalidations.load(Ordering::SeqCst), 1);
+
+    engine.search(FileQuery::new("x")).await;
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn probe_uses_the_capability_cache() {
+    let (provider, calls, _) = Counting::new();
+    let engine =
+        Engine::new(vec![Arc::new(provider) as Arc<dyn SearchProvider>]).with_capability_cache();
+
+    engine.probe(FileQuery::new("x")).await;
+    engine.probe(FileQuery::new("x")).await;
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]

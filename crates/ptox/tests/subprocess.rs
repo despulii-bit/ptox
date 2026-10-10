@@ -106,6 +106,18 @@ async fn provider_without_capabilities_is_universal() {
 }
 
 #[tokio::test]
+async fn capabilities_can_be_invalidated_and_reprobed() {
+    let provider = SubprocessProvider::new("example", example_binary()).arg("capabilities");
+    let first = provider.capabilities().await;
+    assert_eq!(first.query, vec!["text"]);
+
+    provider.invalidate_capabilities();
+    let second = provider.capabilities().await;
+    assert_eq!(first, second);
+    assert_eq!(second.schemes, vec!["https"]);
+}
+
+#[tokio::test]
 async fn abnormal_exit_becomes_a_failure() {
     let bin = example_binary();
     let outcomes = collect(fanout(

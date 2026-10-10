@@ -90,6 +90,11 @@ you emit. An empty field means "any".
 
 The engine probes capabilities concurrently and skips a provider whose
 capabilities reject the query (the skip is reported in `SearchReport::skipped`).
+This happens before every search, so keep `capabilities()` cheap and free of
+I/O. If yours is expensive, a client can enable the engine's opt-in memoization
+(`Engine::with_capability_cache()`); if you cache internally and the answer can
+change, override `SearchProvider::invalidate_capabilities` so
+`Engine::invalidate_capabilities()` can drop your cache and force a re-probe.
 Do not declare a facet you don't actually honor. If you declare any `schemes`,
 `ptox-conformance` checks that every address you emit uses one of them; declaring
 none keeps you universal (any scheme accepted).

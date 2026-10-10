@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Engine` capability memoization (opt-in). Capability probing runs before every
+  search and probe, and a provider may compute its declarations dynamically.
+  `Engine::with_capability_cache()` now asks each provider once and reuses the
+  answer, for both `Engine::search`/`Engine::search_stream` and `Engine::probe`;
+  `Engine::invalidate_capabilities()` drops the engine cache and calls a new
+  default-no-op `SearchProvider::invalidate_capabilities` hook so a provider
+  that also caches internally (e.g. `SubprocessProvider`) can be re-probed. Off
+  by default, since it is only safe for providers whose capabilities are stable
+  between searches.
+
 - `fetch`: opt-in resuming of interrupted HTTP downloads.
   `HttpFetcher::with_resume(true)` re-hashes an existing `<destination>.part`
   and continues it with a `Range` request instead of restarting: it validates

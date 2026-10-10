@@ -29,6 +29,11 @@ for metric in &report.metrics {
 time (no query or result content); `fanout_with_metrics` exposes the same
 `ptox::Metrics` collector to clients that drive providers directly.
 
+Capabilities are probed before every search. `Engine::with_capability_cache()`
+memoizes each provider's declarations (off by default) and
+`Engine::invalidate_capabilities()` drops the cache and asks each provider to
+re-probe, so a client with an expensive `capabilities()` pays it once.
+
 `FileQuery` selectors can be built fluently: `FileQuery::new("annual report")
 .with_mimetype("application/pdf").with_extension(".pdf")
 .with_size_range(0, 10_000_000).with_limit(20)`. The extension helpers normalize

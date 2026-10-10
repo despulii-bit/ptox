@@ -15,7 +15,8 @@
 
 use crate::merge::{merge, MergeOptions, MergedResult};
 use crate::search::{
-    fanout, fanout_with_metrics, Metrics, Options, ProviderMetric, ProviderProbe, SearchProvider,
+    fanout, fanout_with_metrics, Capabilities, Metrics, Options, ProviderMetric, ProviderProbe,
+    ResultStream, SearchProvider,
 };
 use crate::types::{Failure, FileQuery, Outcome};
 use futures::{Stream, StreamExt};
@@ -76,6 +77,8 @@ pub struct Engine {
     providers: Vec<Arc<dyn SearchProvider>>,
     options: Options,
     provider_weights: HashMap<String, f64>,
+    /// Memoized declared capabilities, installed by [`Engine::with_capability_cache`].
+    capabilities: Option<Arc<CapabilityCache>>,
     #[cfg(feature = "fetch")]
     fetchers: FetchRegistry,
 }
@@ -89,6 +92,7 @@ impl Engine {
             providers,
             options: Options::default(),
             provider_weights: HashMap::new(),
+            capabilities: None,
             fetchers: FetchRegistry::with_defaults(),
         }
     }
@@ -100,6 +104,7 @@ impl Engine {
             providers,
             options: Options::default(),
             provider_weights: HashMap::new(),
+            capabilities: None,
         }
     }
 
@@ -122,9 +127,62 @@ impl Engine {
         self
     }
 
-    /// The providers this engine was built with.
+    /// The providers this engine was built with. When
+    /// [`Engine::with_capability_cache`] is enabled these are transparent
+    /// wrappers that delegate `name`/`search` and memoize `capabilities`.
     pub fn providers(&self) -> &[Arc<dyn SearchProvider>] {
         &self.providers
+    }
+
+    /// Memoize each provider's declared [`Capabilities`] after the first probe.
+    ///
+    /// Capabilities are requested before every [`Engine::search`],
+    /// [`Engine::search_stream`], and [`Engine::probe`] call, and a provider is
+    /// free to compute them dynamically. With this opt-in cache the engine asks
+    /// each provider once and reuses the answer, so an in-process provider with
+    /// an expensive capability query pays it only once. This is a pure
+    /// optimization: it never changes which queries a provider receives, only
+    /// how often its declarations are recomputed. Call
+    /// [`Engine::invalidate_capabilities`] to drop the cache and force a
+    /// re-probe.
+    ///
+    /// Off by default; leave it off for a provider whose capabilities can
+    /// change between searches, or invalidate explicitly. Providers that cache
+    /// internally (such as [`crate::SubprocessProvider`]) are unaffected by
+    /// this flag and always pay their own probe at most once.
+    pub fn with_capability_cache(mut self) -> Self {
+        if self.capabilities.is_some() {
+            return self;
+        }
+        let cache = Arc::new(CapabilityCache::default());
+        self.capabilities = Some(cache.clone());
+        self.providers = std::mem::take(&mut self.providers)
+            .into_iter()
+            .map(|inner| {
+                let key = Arc::as_ptr(&inner) as *const () as usize;
+                Arc::new(CapabilityCachedProvider {
+                    inner,
+                    key,
+                    cache: cache.clone(),
+                }) as Arc<dyn SearchProvider>
+            })
+            .collect();
+        self
+    }
+
+    /// Drop every memoized [`Capabilities`] answer (see
+    /// [`Engine::with_capability_cache`]) and ask each provider to drop its own
+    /// internal capability cache, so the next search or probe re-probes.
+    ///
+    /// The engine-level cache is a no-op when it was never enabled, but
+    /// providers are always asked to invalidate their own caches.
+    pub fn invalidate_capabilities(&self) {
+        if let Some(cache) = &self.capabilities {
+            cache.clear();
+        }
+        for provider in &self.providers {
+            provider.invalidate_capabilities();
+        }
     }
 
     /// Run the query across every capable provider; return ranked, deduplicated
@@ -256,4 +314,74 @@ async fn collect(
         outcomes.push(outcome);
     }
     outcomes
+}
+
+/// A cache of each provider's declared [`Capabilities`], keyed by provider
+/// identity. Installed by [`Engine::with_capability_cache`].
+#[derive(Default)]
+struct CapabilityCache {
+    entries: std::sync::Mutex<HashMap<usize, Capabilities>>,
+}
+
+impl CapabilityCache {
+    fn get(&self, key: usize) -> Option<Capabilities> {
+        self.entries
+            .lock()
+            .ok()
+            .and_then(|entries| entries.get(&key).cloned())
+    }
+
+    fn insert(&self, key: usize, capabilities: Capabilities) {
+        if let Ok(mut entries) = self.entries.lock() {
+            entries.insert(key, capabilities);
+        }
+    }
+
+    fn remove(&self, key: usize) {
+        if let Ok(mut entries) = self.entries.lock() {
+            entries.remove(&key);
+        }
+    }
+
+    fn clear(&self) {
+        if let Ok(mut entries) = self.entries.lock() {
+            entries.clear();
+        }
+    }
+}
+
+/// A provider wrapper that memoizes [`SearchProvider::capabilities`].
+///
+/// Installed by [`Engine::with_capability_cache`] on every provider, so both
+/// [`Engine::search`] and [`Engine::probe`] pay the probe cost at most once per
+/// provider until [`Engine::invalidate_capabilities`] is called.
+struct CapabilityCachedProvider {
+    inner: Arc<dyn SearchProvider>,
+    key: usize,
+    cache: Arc<CapabilityCache>,
+}
+
+#[async_trait::async_trait]
+impl SearchProvider for CapabilityCachedProvider {
+    fn name(&self) -> &str {
+        self.inner.name()
+    }
+
+    async fn capabilities(&self) -> Capabilities {
+        if let Some(capabilities) = self.cache.get(self.key) {
+            return capabilities;
+        }
+        let capabilities = self.inner.capabilities().await;
+        self.cache.insert(self.key, capabilities.clone());
+        capabilities
+    }
+
+    fn invalidate_capabilities(&self) {
+        self.cache.remove(self.key);
+        self.inner.invalidate_capabilities();
+    }
+
+    fn search(&self, query: &FileQuery) -> ResultStream<'_> {
+        self.inner.search(query)
+    }
 }

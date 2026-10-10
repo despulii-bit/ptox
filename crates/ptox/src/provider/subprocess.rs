@@ -11,11 +11,10 @@ use async_stream::stream;
 use async_trait::async_trait;
 use std::path::PathBuf;
 use std::process::Stdio;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::io::{AsyncWriteExt, BufReader};
 use tokio::process::Command;
-use tokio::sync::OnceCell;
 use tokio::time::{timeout, Instant};
 
 /// Runs a child process once per query. The child is killed when the stream is
@@ -29,7 +28,7 @@ pub struct SubprocessProvider {
     program: PathBuf,
     args: Vec<String>,
     env: Vec<(String, String)>,
-    capabilities: Arc<OnceCell<Capabilities>>,
+    capabilities: Arc<Mutex<Option<Capabilities>>>,
 }
 
 impl SubprocessProvider {
@@ -40,7 +39,7 @@ impl SubprocessProvider {
             program: program.into(),
             args: Vec::new(),
             env: Vec::new(),
-            capabilities: Arc::new(OnceCell::new()),
+            capabilities: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -78,6 +77,11 @@ impl SubprocessProvider {
                 .map(|(key, value)| (key.into(), value.into())),
         );
         self
+    }
+
+    /// The cached capabilities, if a probe has already completed successfully.
+    fn cached_capabilities(&self) -> Option<Capabilities> {
+        self.capabilities.lock().ok().and_then(|slot| slot.clone())
     }
 
     /// Ask the provider for its capabilities once; `None` if it doesn't answer.
@@ -142,14 +146,23 @@ impl SearchProvider for SubprocessProvider {
 
     /// Ask the provider once, then cache; unknown is treated as universal.
     async fn capabilities(&self) -> Capabilities {
-        self.capabilities
-            .get_or_init(|| async {
-                self.probe_capabilities()
-                    .await
-                    .unwrap_or_else(Capabilities::universal)
-            })
+        if let Some(capabilities) = self.cached_capabilities() {
+            return capabilities;
+        }
+        let capabilities = self
+            .probe_capabilities()
             .await
-            .clone()
+            .unwrap_or_else(Capabilities::universal);
+        if let Ok(mut slot) = self.capabilities.lock() {
+            *slot = Some(capabilities.clone());
+        }
+        capabilities
+    }
+
+    fn invalidate_capabilities(&self) {
+        if let Ok(mut slot) = self.capabilities.lock() {
+            *slot = None;
+        }
     }
 
     fn search(&self, query: &FileQuery) -> ResultStream<'_> {
