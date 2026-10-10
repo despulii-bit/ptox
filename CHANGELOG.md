@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `ptox-conformance`: a `--hash ALGO=VALUE` selector (repeatable) to send
+  hash-only queries (e.g. `--hash cid=<cid>`), so hash-only providers such as
+  IPFS/BitTorrent can be validated. `--query` is optional when `--hash` is given.
+
 ### Changed
 
 - `fanout` now normalizes attribution: a result with an empty `provider` is

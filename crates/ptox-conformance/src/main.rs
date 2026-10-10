@@ -11,6 +11,7 @@ async fn main() -> ExitCode {
     let mut timeout = Duration::from_secs(10);
     let mut max_line_bytes = ptox::MAX_LINE_BYTES;
     let mut query_texts: Vec<String> = Vec::new();
+    let mut hashes: Vec<String> = Vec::new();
     let mut json = false;
     let mut command: Vec<String> = Vec::new();
 
@@ -37,6 +38,16 @@ async fn main() -> ExitCode {
                     Some(text) => query_texts.push(text.clone()),
                     None => {
                         eprintln!("error: --query requires text");
+                        return ExitCode::from(2);
+                    }
+                }
+            }
+            "--hash" => {
+                index += 1;
+                match args.get(index) {
+                    Some(pair) => hashes.push(pair.clone()),
+                    None => {
+                        eprintln!("error: --hash requires ALGO=VALUE");
                         return ExitCode::from(2);
                     }
                 }
@@ -77,12 +88,41 @@ async fn main() -> ExitCode {
 
     let program = PathBuf::from(&command[0]);
     let program_args = command[1..].to_vec();
-    let options = Options {
-        queries: if query_texts.is_empty() {
-            vec![FileQuery::new("conformance test")]
+    let mut hash_map = ptox::HashAlgos::new();
+    for pair in &hashes {
+        match pair.split_once('=') {
+            Some((algo, value)) if !algo.is_empty() && !value.is_empty() => {
+                hash_map.insert(algo.to_owned(), value.to_owned());
+            }
+            _ => {
+                eprintln!("error: --hash expects ALGO=VALUE, got `{pair}`");
+                return ExitCode::from(2);
+            }
+        }
+    }
+
+    let texts = if query_texts.is_empty() {
+        if hash_map.is_empty() {
+            vec!["conformance test".to_owned()]
         } else {
-            query_texts.into_iter().map(FileQuery::new).collect()
-        },
+            vec![String::new()]
+        }
+    } else {
+        query_texts
+    };
+    let queries: Vec<FileQuery> = texts
+        .into_iter()
+        .map(|text| {
+            let mut query = FileQuery::new(text);
+            if !hash_map.is_empty() {
+                query.hashes = Some(hash_map.clone());
+            }
+            query
+        })
+        .collect();
+
+    let options = Options {
+        queries,
         timeout,
         max_line_bytes,
     };
@@ -124,6 +164,7 @@ USAGE:
 OPTIONS:
     --timeout <SECS>        per-query time budget (default 10)
     --query <TEXT>          query to send (repeatable)
+    --hash <ALGO=VALUE>     hash selector, e.g. `cid=bafy...` (repeatable)
     --max-line-bytes <N>    reject provider lines larger than N bytes
     --json                  emit the report as JSON
     -h, --help              show this help
