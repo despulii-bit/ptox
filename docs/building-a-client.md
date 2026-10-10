@@ -12,6 +12,9 @@ engines. A client does four things:
 This guide is the counterpart to [writing-a-provider.md](writing-a-provider.md).
 The contract itself is `crates/ptox/spec/core-contract.md`; retrieval policy is
 [fetching.md](fetching.md); client wiring is [configuration.md](configuration.md).
+For common warnings and errors — an unsupported scheme, `AllFailed`, timeouts,
+`unavailable`, `file://`, and overlay proxies — see
+[troubleshooting.md](troubleshooting.md).
 
 The runnable pieces referenced here ship with the SDK: a client assembled from a
 config is `crates/ptox/examples/config.rs`, and a complete offline

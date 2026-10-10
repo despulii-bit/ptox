@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   still honors the fabric's sha256 verification. Declared as a test target, so
   `cargo test` exercises the whole search-then-fetch path.
 
+### Documentation
+
+- `docs/troubleshooting.md`: a symptom-oriented FAQ for the common warnings and
+  errors — an unsupported scheme, `FetchError::AllFailed`, per-provider
+  timeouts, the `unavailable`/pending state, the `file://` opt-in and
+  `allowed_roots`, I2P/Tor proxy wiring, and `ptox search | head` losing state to
+  a broken pipe. Linked from the root README and the client guide.
+
 ## [0.5.0] - 2026-10-10
 
 ### Added

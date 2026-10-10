@@ -102,7 +102,10 @@ demonstrates the failure modes the suite detects.
 A client assembles the SDK — providers in, ranked results and fetched files out.
 The end-to-end walkthrough (engine setup, streaming vs ranked search, partial
 failures, persistence, retrieval, offline testing) is in
-[**docs/building-a-client.md**](docs/building-a-client.md).
+[**docs/building-a-client.md**](docs/building-a-client.md). When something
+misbehaves — an unsupported scheme, `AllFailed`, timeouts, the
+`unavailable`/pending state, `file://` and `allowed_roots`, or I2P/Tor proxies —
+see [**docs/troubleshooting.md**](docs/troubleshooting.md).
 
 ## Configuring a client
 
