@@ -62,6 +62,37 @@ impl SearchProvider for HashOnly {
     }
 }
 
+/// Pages its fixed list using the query's `offset`/`limit`, as a real backend would.
+struct Paged {
+    results: Vec<FileResult>,
+}
+
+impl SearchProvider for Paged {
+    fn name(&self) -> &str {
+        "paged"
+    }
+
+    fn search(&self, query: &FileQuery) -> ResultStream<'_> {
+        let offset = query.offset.unwrap_or(0) as usize;
+        let limit = query
+            .limit
+            .map(|limit| limit as usize)
+            .unwrap_or(usize::MAX);
+        let page: Vec<FileResult> = self
+            .results
+            .iter()
+            .skip(offset)
+            .take(limit)
+            .cloned()
+            .collect();
+        Box::pin(async_stream::stream! {
+            for result in page {
+                yield Ok(result);
+            }
+        })
+    }
+}
+
 /// Counts how often its capabilities are computed and invalidated.
 struct Counting {
     calls: Arc<AtomicUsize>,
@@ -194,6 +225,52 @@ async fn engine_searches_and_merges_across_providers() {
     assert_eq!(report.results.len(), 1);
     assert_eq!(report.results[0].providers, vec!["a", "b"]);
     assert!(report.failures.is_empty());
+}
+
+#[tokio::test]
+async fn engine_passes_paging_selectors_to_providers() {
+    let results = (0..5)
+        .map(|i| {
+            let mut result = FileResult::new(
+                "paged",
+                vec![Address::new("https", format!("https://paged/file-{i}"))],
+            );
+            result.hashes = Some(HashMap::from([("sha256".to_owned(), format!("{i:064x}"))]));
+            result
+        })
+        .collect();
+    let engine = Engine::new(vec![Arc::new(Paged { results }) as Arc<dyn SearchProvider>]);
+
+    // Page one: the provider skips 0 and returns 2.
+    let first = engine
+        .search(FileQuery::new("x").with_offset(0).with_limit(2))
+        .await;
+    let mut first_uris: Vec<&str> = first
+        .results
+        .iter()
+        .map(|result| result.addresses[0].uri.as_str())
+        .collect();
+    first_uris.sort();
+    assert_eq!(
+        first_uris,
+        vec!["https://paged/file-0", "https://paged/file-1"]
+    );
+
+    // Page two: the same query with an offset returns the next slice, without
+    // the previous page having to be fetched and discarded client-side.
+    let second = engine
+        .search(FileQuery::new("x").with_offset(2).with_limit(2))
+        .await;
+    let mut second_uris: Vec<&str> = second
+        .results
+        .iter()
+        .map(|result| result.addresses[0].uri.as_str())
+        .collect();
+    second_uris.sort();
+    assert_eq!(
+        second_uris,
+        vec!["https://paged/file-2", "https://paged/file-3"]
+    );
 }
 
 #[tokio::test]

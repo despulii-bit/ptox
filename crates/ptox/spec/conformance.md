@@ -50,8 +50,9 @@ Using `vectors.json`:
 
 ## G. Limits and hostile output
 
-1. `limit` bounds results per provider (best-effort) and a global cap bounds the
-   total; a provider emitting unbounded results must not exhaust memory.
+1. `offset` skips (best-effort) and `limit` bounds results per provider, and a
+   global `offset`/`limit` windows the streamed sequence; a provider emitting
+   unbounded results must not exhaust memory.
 2. A provider returning a very large `raw` payload MUST be bounded/truncated or
    rejected, never allowed to OOM the host.
 3. An output line larger than the host's limit MUST be rejected as `malformed`,

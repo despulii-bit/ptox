@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Search paging. `FileQuery` gains `offset`, the per-provider counterpart to
+  `limit`: a provider skips its first N matches, then returns at most `limit`, so
+  a client can request the next page without re-fetching and discarding the
+  previous one. `FileQuery::with_offset` builds it; it is additive on the v2
+  wire (a provider that ignores it simply returns the first page) and is not a
+  capability facet, because pagination is not filtering. `Options` also gains a
+  global `offset`, the stream-level counterpart to `Options::limit`: it skips the
+  first N result outcomes while never skipping failures, so a client driving the
+  fan-out directly can window the sequence the same way.
+
 - `Engine` capability memoization (opt-in). Capability probing runs before every
   search and probe, and a provider may compute its declarations dynamically.
   `Engine::with_capability_cache()` now asks each provider once and reuses the

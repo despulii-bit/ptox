@@ -36,8 +36,10 @@ re-probe, so a client with an expensive `capabilities()` pays it once.
 
 `FileQuery` selectors can be built fluently: `FileQuery::new("annual report")
 .with_mimetype("application/pdf").with_extension(".pdf")
-.with_size_range(0, 10_000_000).with_limit(20)`. The extension helpers normalize
-case and leading dots; empty collections clear their field.
+.with_size_range(0, 10_000_000).with_offset(20).with_limit(20)`. The extension
+helpers normalize case and leading dots; empty collections clear their field.
+`offset` is the per-provider counterpart to `limit` (skip then cap), so
+`with_offset(page * size).with_limit(size)` requests one page.
 
 Retrieval (the `fetch` feature, on by default) turns a result's `Address` into
 bytes: `Engine::fetch(&result, "out.bin").await`. The `ipfs` feature (also on by

@@ -31,11 +31,13 @@ pub type HashAlgos = HashMap<String, String>;
 ///     .with_extension(".PDF")
 ///     .with_size_range(0, 10 * 1024 * 1024)
 ///     .with_lang("en")
+///     .with_offset(50)
 ///     .with_limit(25);
 ///
 /// assert_eq!(query.mimetypes, Some(vec!["application/pdf".to_owned()]));
 /// assert_eq!(query.extensions, Some(vec!["pdf".to_owned()]));
 /// assert_eq!(query.size_max, Some(10 * 1024 * 1024));
+/// assert_eq!(query.offset, Some(50));
 /// assert_eq!(query.limit, Some(25));
 /// ```
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -73,6 +75,14 @@ pub struct FileQuery {
     /// Max results per provider (best-effort).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub limit: Option<u32>,
+    /// Results to skip per provider before `limit` (best-effort pagination).
+    ///
+    /// The counterpart to [`limit`](Self::limit): a provider skips its first
+    /// `offset` matches, then returns at most `limit`. Like every selector it is
+    /// best-effort, and it is pagination rather than a filter, so it is not a
+    /// [`Capabilities`](crate::search::Capabilities) facet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub offset: Option<u32>,
     /// Provider-specific extras; the core never interprets them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<Extras>,
@@ -93,6 +103,7 @@ impl FileQuery {
             published_before: None,
             lang: None,
             limit: None,
+            offset: None,
             extras: None,
         }
     }
@@ -208,6 +219,14 @@ impl FileQuery {
     /// Set the best-effort per-provider result cap ([`limit`](Self::limit)).
     pub fn with_limit(mut self, limit: u32) -> Self {
         self.limit = Some(limit);
+        self
+    }
+
+    /// Set the best-effort per-provider result skip ([`offset`](Self::offset)),
+    /// applied before [`limit`](Self::limit), so `offset` + `limit` select one
+    /// page: `with_offset(page * size).with_limit(size)`.
+    pub fn with_offset(mut self, offset: u32) -> Self {
+        self.offset = Some(offset);
         self
     }
 
@@ -553,6 +572,7 @@ mod builder_tests {
             .with_published_after("2020-01-01T00:00:00Z")
             .with_published_before("2021-01-01T00:00:00Z")
             .with_lang("en")
+            .with_offset(10)
             .with_limit(5)
             .with_extra("lab.foo", "bar")
             .with_extra("lab.count", 3);
@@ -582,6 +602,7 @@ mod builder_tests {
         );
         assert_eq!(query.lang.as_deref(), Some("en"));
         assert_eq!(query.limit, Some(5));
+        assert_eq!(query.offset, Some(10));
         let extras = query.extras.as_ref().unwrap();
         assert_eq!(extras["lab.foo"], serde_json::json!("bar"));
         assert_eq!(extras["lab.count"], serde_json::json!(3));

@@ -13,6 +13,14 @@ pub struct Options {
     pub timeout: Option<Duration>,
     /// Global cap on the number of `Outcome::Result` items streamed.
     pub limit: Option<usize>,
+    /// Global number of `Outcome::Result` items to skip before streaming, the
+    /// pagination counterpart to [`limit`](Self::limit).
+    ///
+    /// Failures are never skipped, so health/diagnostic information is not lost
+    /// by paging. Like `limit`, this is a policy knob over the raw arrival order,
+    /// which the contract does not guarantee to be stable, so it is meaningful
+    /// within one fan-out, not as a globally stable cursor.
+    pub offset: Option<usize>,
     /// Maximum number of providers polled concurrently.
     pub concurrency: Option<usize>,
 }
@@ -193,8 +201,14 @@ pub fn fanout_with_metrics(
         drop(tx);
 
         let mut yielded = 0usize;
+        let mut skipped = 0usize;
+        let offset = options.offset.unwrap_or(0);
         while let Some(outcome) = rx.recv().await {
             if matches!(outcome, Outcome::Result(_)) {
+                if skipped < offset {
+                    skipped += 1;
+                    continue;
+                }
                 if options.limit.is_some_and(|limit| yielded >= limit) {
                     break;
                 }

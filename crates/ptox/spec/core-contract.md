@@ -33,6 +33,7 @@ results.*
 | `published_before` | string | no | RFC 3339 UTC; publish-time upper bound. |
 | `lang` | string | no | Preferred language (BCP 47). |
 | `limit` | int | no | Max results **per provider** (best-effort). |
+| `offset` | int | no | Results to skip **per provider** before `limit` (best-effort pagination). |
 | `extras` | `{string: any}` | no | Provider-specific passthrough; keys SHOULD be namespaced. |
 
 Providers MUST NOT mutate the query.
@@ -40,6 +41,14 @@ Providers MUST NOT mutate the query.
 **Filter semantics.** Filters are OR within a field and AND across fields. They are
 best-effort: a provider that cannot honor a filter MUST still return text matches
 rather than an empty result.
+
+**Paging.** `offset` and `limit` are per-provider pagination controls, not
+filters: a provider skips its first `offset` own matches, then returns at most
+`limit`. Both are best-effort like filters, and neither is a capability facet
+(§6). The same query with a larger `offset` requests the next page from each
+provider. Because results are neither ordered nor deterministic (§8.5, §8.12), a
+page is meaningful within one provider/query; a client that needs a stable page
+across searches must snapshot the first result set and page over that snapshot.
 
 ---
 
@@ -210,5 +219,5 @@ unknown fields. The machine-readable schema ships with the SDK at
 `spec/schema/wire.schema.json`.
 
 - **v2** — `mimetype` → `mimetypes` (list); added `extensions`, `filename`,
-  `published_after`/`published_before`, `lang` to `FileQuery`; added `lang`,
-  `published`, `last_seen`, `score` to `FileResult`.
+  `published_after`/`published_before`, `lang`, and `offset` to `FileQuery`;
+  added `lang`, `published`, `last_seen`, `score` to `FileResult`.

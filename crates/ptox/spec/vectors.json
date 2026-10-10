@@ -29,6 +29,7 @@
           "size_max": 104857600,
           "published_after": "2024-01-01T00:00:00Z",
           "lang": "en",
+          "offset": 50,
           "limit": 25,
           "extras": {
             "example.sort": "recent"
@@ -200,6 +201,13 @@
         "value": {
           "text": "x",
           "filename": ""
+        }
+      },
+      {
+        "name": "negative_offset",
+        "value": {
+          "text": "x",
+          "offset": -1
         }
       }
     ],

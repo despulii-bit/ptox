@@ -234,6 +234,67 @@ async fn global_limit_caps_streamed_results() {
 }
 
 #[tokio::test]
+async fn global_offset_skips_leading_results_then_limit_applies() {
+    let options = Options {
+        offset: Some(3),
+        limit: Some(2),
+        ..Options::default()
+    };
+    let outcomes = collect(fanout(
+        query(),
+        providers(vec![Mock::new("p").with_results(10)]),
+        options,
+    ))
+    .await;
+
+    let uris: Vec<&str> = outcomes
+        .iter()
+        .filter_map(|outcome| outcome.as_result())
+        .map(|result| result.addresses[0].uri.as_str())
+        .collect();
+    assert_eq!(
+        uris,
+        vec!["https://example.org/file-3", "https://example.org/file-4"]
+    );
+}
+
+#[tokio::test]
+async fn global_offset_without_limit_yields_the_tail() {
+    let options = Options {
+        offset: Some(7),
+        ..Options::default()
+    };
+    let outcomes = collect(fanout(
+        query(),
+        providers(vec![Mock::new("p").with_results(10)]),
+        options,
+    ))
+    .await;
+
+    assert_eq!(
+        outcomes.iter().filter(|o| o.as_result().is_some()).count(),
+        3
+    );
+}
+
+#[tokio::test]
+async fn global_offset_never_skips_failures() {
+    let options = Options {
+        offset: Some(5),
+        ..Options::default()
+    };
+    let outcomes = collect(fanout(
+        query(),
+        providers(vec![Mock::new("p").with_error("transport")]),
+        options,
+    ))
+    .await;
+
+    assert_eq!(outcomes.len(), 1);
+    assert!(outcomes[0].as_failure().is_some());
+}
+
+#[tokio::test]
 async fn results_are_attributed_and_shaped() {
     let outcomes = collect(fanout(
         query(),
