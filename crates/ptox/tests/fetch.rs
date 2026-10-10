@@ -1643,3 +1643,96 @@ async fn proxy_fetcher_rejects_an_empty_host() {
         "got {error:?}"
     );
 }
+
+/// A one-shot SOCKS5 server: completes the handshake, records the requested
+/// host (proving remote DNS), then answers the tunnelled HTTP request with
+/// `body`.
+async fn serve_socks5(body: &'static [u8]) -> (String, Arc<std::sync::Mutex<String>>) {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind");
+    let addr = listener.local_addr().expect("addr");
+    let seen = Arc::new(std::sync::Mutex::new(String::new()));
+    let recorded = seen.clone();
+    tokio::spawn(async move {
+        let Ok((mut socket, _)) = listener.accept().await else {
+            return;
+        };
+
+        // Greeting: 0x05, nmethods, methods...
+        let mut greeting = [0u8; 2];
+        if socket.read_exact(&mut greeting).await.is_err() {
+            return;
+        }
+        let mut methods = vec![0u8; greeting[1] as usize];
+        let _ = socket.read_exact(&mut methods).await;
+        let _ = socket.write_all(&[0x05, 0x00]).await; // no auth
+
+        // Request: 0x05, cmd, rsv, atyp, addr, port.
+        let mut head = [0u8; 4];
+        if socket.read_exact(&mut head).await.is_err() {
+            return;
+        }
+        let host = match head[3] {
+            0x01 => {
+                let mut ip = [0u8; 4];
+                let _ = socket.read_exact(&mut ip).await;
+                format!("{}.{}.{}.{}", ip[0], ip[1], ip[2], ip[3])
+            }
+            0x03 => {
+                let mut len = [0u8; 1];
+                let _ = socket.read_exact(&mut len).await;
+                let mut domain = vec![0u8; len[0] as usize];
+                let _ = socket.read_exact(&mut domain).await;
+                String::from_utf8_lossy(&domain).into_owned()
+            }
+            0x04 => {
+                let mut ip = [0u8; 16];
+                let _ = socket.read_exact(&mut ip).await;
+                "::".to_owned()
+            }
+            _ => String::new(),
+        };
+        let mut port = [0u8; 2];
+        let _ = socket.read_exact(&mut port).await;
+        *recorded.lock().expect("lock") = host;
+
+        // Success reply (bound address 0.0.0.0:0), then act as the target.
+        let _ = socket
+            .write_all(&[0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0])
+            .await;
+        let mut request = [0u8; 4096];
+        let _ = socket.read(&mut request).await;
+        let header = format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            body.len()
+        );
+        let _ = socket.write_all(header.as_bytes()).await;
+        let _ = socket.write_all(body).await;
+        let _ = socket.flush().await;
+    });
+    (format!("socks5h://{addr}"), seen)
+}
+
+#[tokio::test]
+async fn socks5h_proxy_tunnels_the_request() {
+    let body: &'static [u8] = b"socks payload";
+    let (proxy, host) = serve_socks5(body).await;
+    let dest = temp_dest("socks5-fetch");
+    let mut registry = FetchRegistry::new();
+    registry.register(Arc::new(HttpFetcher::new().with_proxy(proxy)));
+
+    let fetched = registry
+        .fetch(
+            &Address::new("http", "http://example.invalid/file"),
+            dest.clone(),
+            Some(sha256_hex(body)),
+        )
+        .await
+        .expect("fetch through the SOCKS5 proxy");
+
+    assert_eq!(fetched.bytes, body.len() as u64);
+    // socks5h sends the hostname to the proxy (remote DNS), not a resolved IP.
+    assert_eq!(host.lock().expect("lock").as_str(), "example.invalid");
+    let _ = std::fs::remove_file(&dest);
+}
