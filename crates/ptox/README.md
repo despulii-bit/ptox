@@ -31,6 +31,12 @@ Providers (network plugins) and clients (frontends) are separate software. The
 contract, JSON Schema, and conformance suite live in the repository:
 <https://github.com/despulii-bit/ptox>.
 
+`MergedResult` is a persistence contract: its serialized shape only gains fields
+within a major version, so a client can store search results between a search and
+a later fetch and still read them after an SDK upgrade. `suggest_filename(&result)`
+suggests a safe name for the file (the title, else the preferred address, with
+illegal characters replaced).
+
 ## Writing a provider
 
 Implement the `SearchProvider` trait and pass it to `fanout` or `Engine`. The

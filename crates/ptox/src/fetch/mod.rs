@@ -260,17 +260,11 @@ pub fn verify_sha256(expected: Option<&str>, actual: &str) -> Result<(), FetchEr
 }
 
 /// Pick the preferred address of a result: `https` > `http` > `ipfs` > `magnet` > other.
+///
+/// The ordering is shared with [`crate::merge::suggest_filename`] so a suggested
+/// filename and the address that is actually fetched agree.
 pub fn preferred_address(result: &MergedResult) -> Option<&Address> {
-    result
-        .addresses
-        .iter()
-        .min_by_key(|address| match address.scheme.as_str() {
-            "https" => 0,
-            "http" => 1,
-            "ipfs" => 2,
-            "magnet" => 3,
-            _ => 4,
-        })
+    crate::merge::preferred_address(result)
 }
 
 /// The expected sha256 for a result/address, if either carries one.

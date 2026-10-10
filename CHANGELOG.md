@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `merge::suggest_filename`: a deterministic, offline helper that turns a
+  `MergedResult` into a safe filename — the title, else the last path segment of
+  the preferred address, else `download.bin` — replacing characters that are
+  illegal on common platforms and appending an extension from a known
+  `mimetype`.
+- Persistence-stability guarantee for `MergedResult`. The serialized shape is a
+  contract (fields are only added within a major version, with `serde(default)`
+  and `skip_serializing_if`), documented on the type, so clients can persist
+  results between a search and a later fetch without an SDK upgrade silently
+  invalidating them. `providers`, `addresses`, and `score` now carry
+  `#[serde(default)]` so minimal/older blobs still deserialize.
 - Provider-authoring docs and example. `examples/rust_provider.rs` is a
   runnable, offline-testable `SearchProvider`: it implements the trait with a
   streaming `search`, declares `Capabilities`, maps a fake backend's failures
