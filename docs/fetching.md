@@ -419,6 +419,35 @@ the **whole** file, so a corrupt partial is rejected rather than exposed. The
 prefix is re-read and hashed, so resuming costs one pass over the bytes already
 on disk.
 
+## Bounding HTTP timeouts
+
+`HttpFetcher` uses reqwest's defaults, which include **no timeout**, so a
+black-holed connection or a server that stops sending mid-body can hang a fetch
+forever. Two opt-in knobs bound that:
+
+```rust
+use ptox::HttpFetcher;
+use std::time::Duration;
+
+let fetcher = HttpFetcher::new()
+    .with_connect_timeout(Duration::from_secs(5))   // TCP/TLS connect phase
+    .with_read_timeout(Duration::from_secs(30));   // idle time between reads
+```
+
+`with_connect_timeout` bounds only the connect phase. `with_read_timeout` bounds
+the wait for more bytes and **resets after every successful read**, so it catches
+a stalled transfer without imposing a total deadline on a legitimately large or
+slow download. Both are **off by default**; enabling them is a policy choice, and
+the `read_timeout` value should be comfortably longer than the server's normal
+inter-arrival time. A timed-out attempt fails with `FetchError::Network`, cleans
+up any `.part` file, and — like any other transient network error — is retried
+when a `RetryPolicy` is configured (see “Retrying transient HTTP failures”
+above).
+
+A total deadline (covering the whole body) is intentionally not exposed: it
+would cut off large downloads. A caller that needs one can wrap the fetch in
+`tokio::time::timeout`.
+
 ## Writing your own fetcher
 
 Implement `Fetcher` for a new protocol and register it. Keep the same
@@ -491,6 +520,8 @@ fetchers.
 - [ ] Transient HTTP failures are retried only when opted in.
 - [ ] Long downloads can be resumed (`HttpFetcher::with_resume`) or are cheap to
       restart.
+- [ ] A stalled HTTP transfer or connect is bounded by a timeout, not left to
+      hang forever.
 
 ## See also
 

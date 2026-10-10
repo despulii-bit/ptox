@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `fetch`: opt-in HTTP timeouts. `HttpFetcher` now offers
+  `with_connect_timeout(Duration)` (bounds the TCP/TLS connect phase) and
+  `with_read_timeout(Duration)` (bounds the idle wait for more bytes, resetting
+  after each successful read, so it detects a stalled transfer without capping a
+  legitimately large download), plus `connect_timeout()` / `read_timeout()`
+  getters. Both are **off by default** (reqwest's default), so an existing client
+  is unchanged; a timed-out attempt fails with `FetchError::Network`, removes any
+  `.part` file, and participates in `RetryPolicy` like any other transient
+  network error. Documented in `docs/fetching.md`.
+
 - `fetch`: registry introspection. `FetchRegistry::schemes()` returns every
   address scheme the registry can resolve (sorted, deduplicated), so a client can
   report what it can fetch without re-deriving the set from its own config.

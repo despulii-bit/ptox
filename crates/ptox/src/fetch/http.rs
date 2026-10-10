@@ -122,29 +122,114 @@ enum AttemptError {
 /// Fetches `http`/`https` URLs. Writes atomically and verifies sha256.
 pub struct HttpFetcher {
     client: reqwest::Client,
+    user_agent: Option<String>,
+    connect_timeout: Option<Duration>,
+    read_timeout: Option<Duration>,
     schemes: Vec<String>,
     retry: RetryPolicy,
     resume: bool,
 }
 
 impl HttpFetcher {
-    /// A fetcher for `http`/`https` using the default `User-Agent` and no retry.
+    /// A fetcher for `http`/`https` using the default `User-Agent`.
+    ///
+    /// The client has **no timeouts** by default (reqwest's default), so a
+    /// stalled connection or a server that stops sending can hang a fetch. Opt
+    /// in with [`HttpFetcher::with_connect_timeout`] and
+    /// [`HttpFetcher::with_read_timeout`]. Retries are off (one attempt) and
+    /// resuming is off; see [`HttpFetcher::with_retry`] and
+    /// [`HttpFetcher::with_resume`].
     pub fn new() -> Self {
         Self::with_user_agent(DEFAULT_USER_AGENT)
     }
 
+    /// Build the underlying client from the current options, falling back to a
+    /// default client if reqwest rejects the configuration.
+    fn build_client(
+        user_agent: Option<&str>,
+        connect_timeout: Option<Duration>,
+        read_timeout: Option<Duration>,
+    ) -> reqwest::Client {
+        let mut builder = reqwest::Client::builder();
+        if let Some(user_agent) = user_agent {
+            builder = builder.user_agent(user_agent);
+        }
+        if let Some(timeout) = connect_timeout {
+            builder = builder.connect_timeout(timeout);
+        }
+        if let Some(timeout) = read_timeout {
+            builder = builder.read_timeout(timeout);
+        }
+        builder.build().unwrap_or_else(|_| reqwest::Client::new())
+    }
+
     /// Override the `User-Agent` sent with requests.
     pub fn with_user_agent(user_agent: &str) -> Self {
-        let client = reqwest::Client::builder()
-            .user_agent(user_agent)
-            .build()
-            .unwrap_or_else(|_| reqwest::Client::new());
         Self {
-            client,
+            client: Self::build_client(Some(user_agent), None, None),
+            user_agent: Some(user_agent.to_owned()),
+            connect_timeout: None,
+            read_timeout: None,
             schemes: vec!["http".to_owned(), "https".to_owned()],
             retry: RetryPolicy::default(),
             resume: false,
         }
+    }
+
+    /// Bound how long the client waits to establish a connection.
+    ///
+    /// Off by default (reqwest waits indefinitely). This is the TCP/TLS connect
+    /// phase only; use [`HttpFetcher::with_read_timeout`] to bound a transfer
+    /// that has connected but gone quiet.
+    ///
+    /// ```
+    /// use ptox::HttpFetcher;
+    /// use std::time::Duration;
+    ///
+    /// let fetcher = HttpFetcher::new().with_connect_timeout(Duration::from_secs(5));
+    /// assert_eq!(fetcher.connect_timeout(), Some(Duration::from_secs(5)));
+    /// ```
+    pub fn with_connect_timeout(mut self, timeout: Duration) -> Self {
+        self.connect_timeout = Some(timeout);
+        self.client = Self::build_client(
+            self.user_agent.as_deref(),
+            self.connect_timeout,
+            self.read_timeout,
+        );
+        self
+    }
+
+    /// Bound how long the client waits for more bytes between reads.
+    ///
+    /// The timeout resets after every successful read, so it detects a stalled
+    /// connection without capping a legitimately large or slow download (unlike
+    /// a total request deadline). Off by default.
+    ///
+    /// ```
+    /// use ptox::HttpFetcher;
+    /// use std::time::Duration;
+    ///
+    /// let fetcher = HttpFetcher::new().with_read_timeout(Duration::from_secs(30));
+    /// assert_eq!(fetcher.read_timeout(), Some(Duration::from_secs(30)));
+    /// ```
+    pub fn with_read_timeout(mut self, timeout: Duration) -> Self {
+        self.read_timeout = Some(timeout);
+        self.client = Self::build_client(
+            self.user_agent.as_deref(),
+            self.connect_timeout,
+            self.read_timeout,
+        );
+        self
+    }
+
+    /// The configured connect timeout, if any.
+    pub fn connect_timeout(&self) -> Option<Duration> {
+        self.connect_timeout
+    }
+
+    /// The configured read timeout, if any.
+    pub fn read_timeout(&self) -> Option<Duration> {
+        self.read_timeout
     }
 
     /// Opt in to retrying transient failures with `policy`.
@@ -569,6 +654,21 @@ mod tests {
     fn resume_is_off_by_default() {
         assert!(!HttpFetcher::new().resume_enabled());
         assert!(HttpFetcher::new().with_resume(true).resume_enabled());
+    }
+
+    #[test]
+    fn timeouts_are_off_by_default_and_chain() {
+        let fetcher = HttpFetcher::new();
+        assert_eq!(fetcher.connect_timeout(), None);
+        assert_eq!(fetcher.read_timeout(), None);
+
+        let fetcher = HttpFetcher::new()
+            .with_connect_timeout(Duration::from_secs(3))
+            .with_read_timeout(Duration::from_secs(17));
+        assert_eq!(fetcher.connect_timeout(), Some(Duration::from_secs(3)));
+        assert_eq!(fetcher.read_timeout(), Some(Duration::from_secs(17)));
+        // User-Agent changes survive later timeout changes (the client is rebuilt).
+        assert_eq!(fetcher.user_agent.as_deref(), Some(DEFAULT_USER_AGENT));
     }
 
     #[test]

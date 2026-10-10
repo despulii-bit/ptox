@@ -51,6 +51,29 @@ async fn serve_truncated() -> String {
     format!("http://{addr}/file")
 }
 
+/// A server that sends headers and a partial body, then stalls without
+/// finishing (or closing) the response, so a read timeout is observable.
+async fn serve_stalled() -> String {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind");
+    let addr = listener.local_addr().expect("addr");
+    tokio::spawn(async move {
+        if let Ok((mut socket, _)) = listener.accept().await {
+            let mut buffer = [0u8; 2048];
+            let _ = socket.read(&mut buffer).await;
+            let header = "HTTP/1.1 200 OK\r\nContent-Length: 1024\r\nConnection: close\r\n\r\n";
+            let _ = socket.write_all(header.as_bytes()).await;
+            let _ = socket.write_all(b"partial").await;
+            let _ = socket.flush().await;
+            // Hold the connection open without sending the rest, letting the
+            // client's read timeout fire (the test is long over by then).
+            tokio::time::sleep(Duration::from_secs(30)).await;
+        }
+    });
+    format!("http://{addr}/file")
+}
+
 /// One canned reply for [`serve_script`].
 enum Reply {
     /// A non-2xx status with an empty body.
@@ -362,6 +385,29 @@ async fn http_stream_error_removes_the_partial_file() {
         .fetch(&Address::new("http", url), dest.clone(), None)
         .await
         .expect_err("a truncated body must fail");
+
+    assert!(matches!(error, FetchError::Network(_)), "got {error:?}");
+    assert!(!dest.exists(), "destination must not exist on failure");
+    let part = dest.with_file_name(format!(
+        "{}.part",
+        dest.file_name().expect("name").to_string_lossy()
+    ));
+    assert!(!part.exists(), "partial file must be removed on failure");
+}
+
+#[tokio::test]
+async fn http_read_timeout_fails_a_stalled_response() {
+    let url = serve_stalled().await;
+    let dest = temp_dest("stalled");
+    let mut registry = FetchRegistry::new();
+    registry.register(Arc::new(
+        HttpFetcher::new().with_read_timeout(Duration::from_millis(200)),
+    ));
+
+    let error = registry
+        .fetch(&Address::new("http", url), dest.clone(), None)
+        .await
+        .expect_err("a stalled response must hit the read timeout");
 
     assert!(matches!(error, FetchError::Network(_)), "got {error:?}");
     assert!(!dest.exists(), "destination must not exist on failure");
