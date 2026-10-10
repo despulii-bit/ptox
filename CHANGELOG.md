@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- examples: `crates/ptox/examples/client.rs`, a runnable, offline end-to-end
+  client — an in-process `SearchProvider`, a ranked `Engine::search`, and an
+  `Engine::fetch` of the top hit to a temp file through a fake `Fetcher` that
+  still honors the fabric's sha256 verification. Declared as a test target, so
+  `cargo test` exercises the whole search-then-fetch path.
+
 ## [0.5.0] - 2026-10-10
 
 ### Added

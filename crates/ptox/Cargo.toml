@@ -51,6 +51,11 @@ name = "config"
 required-features = ["config"]
 test = true
 
+[[example]]
+name = "client"
+required-features = ["fetch"]
+test = true
+
 [dev-dependencies]
 async-stream = "0.3"
 async-trait = "0.1"

@@ -14,7 +14,9 @@ The contract itself is `crates/ptox/spec/core-contract.md`; retrieval policy is
 [fetching.md](fetching.md); client wiring is [configuration.md](configuration.md).
 
 The runnable pieces referenced here ship with the SDK: a client assembled from a
-config is `crates/ptox/examples/config.rs`.
+config is `crates/ptox/examples/config.rs`, and a complete offline
+search-then-fetch client is `crates/ptox/examples/client.rs`
+(`cargo run -p ptox --example client`).
 
 ## 1. What the client owns (and what it must not)
 
@@ -347,7 +349,16 @@ Keep the SDK at the seam so you never hit a network in tests:
 
 No sockets, no real providers, deterministic.
 
+The SDK ships this exact shape: `crates/ptox/examples/client.rs` is a runnable
+end-to-end client (in-process fake provider + fake `Fetcher`) that `cargo test`
+executes as a test target.
+
 ## 13. Minimal client, end to end
+
+A complete, runnable version of this section is
+[`crates/ptox/examples/client.rs`](../crates/ptox/examples/client.rs)
+(`cargo run -p ptox --example client`), which uses an in-process fake provider
+and a fake `Fetcher` so it needs no network.
 
 ```rust
 use std::sync::Arc;

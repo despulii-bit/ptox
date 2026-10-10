@@ -83,6 +83,13 @@ feature `config`): `Config::load` / `from_toml_str` parse and validate it,
 and `Config::providers()` / `fetch_registry()` / `merge_options()` build the
 pieces a client needs. See `docs/configuration.md` in the repository.
 
+The repository ships a complete, runnable client — an in-process provider, a
+ranked search, and a fetch to a temp file through a fake `Fetcher`, all offline:
+
+```sh
+cargo run -p ptox --example client
+```
+
 ## Writing a provider
 
 Implement the `SearchProvider` trait and pass it to `fanout` or `Engine`. The
