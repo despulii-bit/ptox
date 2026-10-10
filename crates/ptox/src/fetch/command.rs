@@ -80,10 +80,18 @@ impl Fetcher for CommandFetcher {
             )));
         }
 
+        // A command that exits 0 without producing the destination is a failure,
+        // not a zero-byte success.
         let bytes = tokio::fs::metadata(&request.destination)
             .await
-            .map(|metadata| metadata.len())
-            .unwrap_or(0);
+            .map_err(|error| {
+                FetchError::Command(format!(
+                    "{} exited successfully but did not create {}: {error}",
+                    self.program,
+                    request.destination.display()
+                ))
+            })?
+            .len();
         let digest = sha256_file(&request.destination).await.ok();
         if let Some(actual) = digest.as_deref() {
             verify_sha256(request.expected_sha256.as_deref(), actual)?;

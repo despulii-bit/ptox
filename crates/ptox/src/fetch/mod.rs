@@ -160,10 +160,22 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
     hex::encode(Sha256::digest(bytes))
 }
 
-/// sha256 of a file, as lowercase hex.
+/// sha256 of a file, as lowercase hex. Streams the file in chunks so a large
+/// download is never read into memory at once.
 pub async fn sha256_file(path: &Path) -> std::io::Result<String> {
-    let bytes = tokio::fs::read(path).await?;
-    Ok(sha256_hex(&bytes))
+    use tokio::io::AsyncReadExt;
+
+    let mut file = tokio::fs::File::open(path).await?;
+    let mut hasher = Sha256::new();
+    let mut buffer = vec![0u8; 64 * 1024];
+    loop {
+        let read = file.read(&mut buffer).await?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    Ok(hex::encode(hasher.finalize()))
 }
 
 /// Verify `actual` against an optional `expected` sha256 (case-insensitive).

@@ -12,6 +12,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that declines capability negotiation is treated as universal and still passes;
   one that answers must return a well-formed capability object.
 
+### Fixed
+
+- `fetch`: `CommandFetcher` now fails when the delegated command exits 0 without
+  creating the destination, instead of reporting a zero-byte success.
+- `fetch`: `HttpFetcher` removes its `.part` file when a download fails
+  mid-stream, not only on a hash mismatch.
+- `fetch`: `sha256_file` streams the file in chunks instead of reading it whole,
+  so verifying a large download can't exhaust memory.
+
 ## [0.1.0] - 2026-10-10
 
 First public release.

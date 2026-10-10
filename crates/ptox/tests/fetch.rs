@@ -1,6 +1,6 @@
 #![cfg(feature = "fetch")]
 
-use ptox::{sha256_hex, Address, CommandFetcher, FetchError, FetchRegistry};
+use ptox::{sha256_file, sha256_hex, Address, CommandFetcher, FetchError, FetchRegistry};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -20,6 +20,26 @@ async fn serve_once(body: &'static [u8]) -> String {
             );
             let _ = socket.write_all(header.as_bytes()).await;
             let _ = socket.write_all(body).await;
+            let _ = socket.flush().await;
+        }
+    });
+    format!("http://{addr}/file")
+}
+
+/// A server that promises more bytes than it sends, so the client sees a
+/// mid-stream transport error.
+async fn serve_truncated() -> String {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind");
+    let addr = listener.local_addr().expect("addr");
+    tokio::spawn(async move {
+        if let Ok((mut socket, _)) = listener.accept().await {
+            let mut buffer = [0u8; 2048];
+            let _ = socket.read(&mut buffer).await;
+            let header = "HTTP/1.1 200 OK\r\nContent-Length: 1024\r\nConnection: close\r\n\r\n";
+            let _ = socket.write_all(header.as_bytes()).await;
+            let _ = socket.write_all(b"short").await;
             let _ = socket.flush().await;
         }
     });
@@ -108,4 +128,57 @@ async fn command_fetcher_delegates_a_scheme() {
     assert_eq!(fetched.bytes, 7);
     let _ = std::fs::remove_file(&source);
     let _ = std::fs::remove_file(&dest);
+}
+
+#[tokio::test]
+async fn command_fetcher_errors_when_it_creates_nothing() {
+    let dest = temp_dest("noop-command");
+    let mut registry = FetchRegistry::new();
+    registry.register(Arc::new(CommandFetcher::new(
+        "noop",
+        vec!["noop".to_owned()],
+        "true",
+        Vec::new(),
+    )));
+
+    let error = registry
+        .fetch(&Address::new("noop", "ignored"), dest.clone(), None)
+        .await
+        .expect_err("a command that creates nothing must fail");
+
+    assert!(matches!(error, FetchError::Command(_)), "got {error:?}");
+    assert!(!dest.exists());
+}
+
+#[tokio::test]
+async fn http_stream_error_removes_the_partial_file() {
+    let url = serve_truncated().await;
+    let dest = temp_dest("truncated");
+    let registry = FetchRegistry::with_defaults();
+
+    let error = registry
+        .fetch(&Address::new("http", url), dest.clone(), None)
+        .await
+        .expect_err("a truncated body must fail");
+
+    assert!(matches!(error, FetchError::Network(_)), "got {error:?}");
+    assert!(!dest.exists(), "destination must not exist on failure");
+    let part = dest.with_file_name(format!(
+        "{}.part",
+        dest.file_name().expect("name").to_string_lossy()
+    ));
+    assert!(!part.exists(), "partial file must be removed on failure");
+}
+
+#[tokio::test]
+async fn sha256_file_streams_and_matches_in_memory_hash() {
+    let path = temp_dest("sha-file");
+    // Larger than the streaming buffer, so multiple reads are exercised.
+    let body = vec![7u8; 200_000];
+    std::fs::write(&path, &body).expect("write");
+
+    let digest = sha256_file(&path).await.expect("hash");
+
+    assert_eq!(digest, sha256_hex(&body));
+    let _ = std::fs::remove_file(&path);
 }
