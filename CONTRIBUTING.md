@@ -43,9 +43,7 @@ cargo test --workspace
 - `crates/ptox/spec/vectors.json` — language-neutral data-validation vectors.
 - `crates/ptox` — the SDK: `types`, `search`, `provider`, `fetch`, and `merge` modules.
 - `crates/ptox-conformance` — provider conformance suite.
-
-Providers live in **separate repos** (or, for development, the private lab).
-- Providers live in **separate repos**, e.g. `ptox-provider-btdht`.
+- Providers live in **separate repos** — never in the core.
 
 ## Writing a provider
 

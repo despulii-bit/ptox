@@ -1,5 +1,5 @@
 # Agent / development-only paths — never tracked in the program repo.
-# Agent scaffolding lives in a separate repo (../ptox-agents).
+# Agent scaffolding lives in a separate private repo.
 AGENTS.md
 CLAUDE.md
 .pi/

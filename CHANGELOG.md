@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Removed references to internal planning drafts from the shipped contract, so
+  the public SDK no longer points at private repositories.
 - `fetch`: `CommandFetcher` now fails when the delegated command exits 0 without
   creating the destination, instead of reporting a zero-byte success.
 - `fetch`: `HttpFetcher` removes its `.part` file when a download fails

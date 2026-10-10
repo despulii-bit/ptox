@@ -1,7 +1,6 @@
 # ptox Core Contract — v2 (locked)
 
-Language-neutral and authoritative. Supersedes the planning drafts in
-`ptox-agents/planning/core-interface.md` and `core-minimal.md`.
+Language-neutral and authoritative. Supersedes earlier internal planning drafts.
 
 The core has **no state, no policy, no discovery, and no network I/O**. It is a
 pure fan-out: *given a query and a set of injected providers, stream attributed
