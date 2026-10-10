@@ -80,6 +80,11 @@ pub struct Fetched {
     pub sha256: Option<String>,
 }
 
+/// A progress observer, called with the cumulative number of bytes retrieved so
+/// far. It is invoked once per received chunk, on the retrieval task, so it must
+/// be cheap and must not block.
+pub type ProgressFn<'a> = dyn Fn(u64) + Send + Sync + 'a;
+
 /// One way of turning an address into bytes (one protocol).
 #[async_trait]
 pub trait Fetcher: Send + Sync {
@@ -89,6 +94,23 @@ pub trait Fetcher: Send + Sync {
     fn schemes(&self) -> &[String];
     /// Retrieve `request`, writing the bytes to its destination.
     async fn fetch(&self, request: &FetchRequest) -> Result<Fetched, FetchError>;
+
+    /// Like [`Fetcher::fetch`], but report the cumulative number of retrieved
+    /// bytes to `progress` as they arrive.
+    ///
+    /// The default implementation ignores `progress` and calls
+    /// [`Fetcher::fetch`], so a fetcher that cannot observe progress (e.g. a
+    /// command-delegated scheme) need not implement this method. A caller that
+    /// needs progress should use this method; a caller that does not can keep
+    /// calling [`Fetcher::fetch`].
+    async fn fetch_with_progress(
+        &self,
+        request: &FetchRequest,
+        progress: &ProgressFn<'_>,
+    ) -> Result<Fetched, FetchError> {
+        let _ = progress;
+        self.fetch(request).await
+    }
 }
 
 /// Dispatches an `Address` to the registered fetcher for its scheme.
@@ -131,15 +153,31 @@ impl FetchRegistry {
         destination: impl Into<PathBuf>,
         expected_sha256: Option<String>,
     ) -> Result<Fetched, FetchError> {
+        self.fetch_with_progress(address, destination, expected_sha256, &|_: u64| {})
+            .await
+    }
+
+    /// Like [`FetchRegistry::fetch`], but report cumulative retrieved bytes to
+    /// `progress` as they arrive. See [`Fetcher::fetch_with_progress`].
+    pub async fn fetch_with_progress(
+        &self,
+        address: &Address,
+        destination: impl Into<PathBuf>,
+        expected_sha256: Option<String>,
+        progress: &ProgressFn<'_>,
+    ) -> Result<Fetched, FetchError> {
         let fetcher = self
             .fetcher_for(&address.scheme)
             .ok_or_else(|| FetchError::Unsupported(address.scheme.clone()))?;
         fetcher
-            .fetch(&FetchRequest {
-                address: address.clone(),
-                destination: destination.into(),
-                expected_sha256,
-            })
+            .fetch_with_progress(
+                &FetchRequest {
+                    address: address.clone(),
+                    destination: destination.into(),
+                    expected_sha256,
+                },
+                progress,
+            )
             .await
     }
 
@@ -149,9 +187,26 @@ impl FetchRegistry {
         result: &MergedResult,
         destination: impl Into<PathBuf>,
     ) -> Result<Fetched, FetchError> {
-        let address = preferred_address(result).ok_or(FetchError::NoAddress)?;
-        self.fetch(address, destination, expected_sha256(result, address))
+        self.fetch_merged_with_progress(result, destination, &|_: u64| {})
             .await
+    }
+
+    /// Like [`FetchRegistry::fetch_merged`], but report cumulative retrieved
+    /// bytes to `progress` as they arrive.
+    pub async fn fetch_merged_with_progress(
+        &self,
+        result: &MergedResult,
+        destination: impl Into<PathBuf>,
+        progress: &ProgressFn<'_>,
+    ) -> Result<Fetched, FetchError> {
+        let address = preferred_address(result).ok_or(FetchError::NoAddress)?;
+        self.fetch_with_progress(
+            address,
+            destination,
+            expected_sha256(result, address),
+            progress,
+        )
+        .await
     }
 }
 

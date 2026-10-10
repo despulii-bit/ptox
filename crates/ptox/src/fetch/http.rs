@@ -1,4 +1,4 @@
-use super::{temp_path, verify_sha256, FetchError, FetchRequest, Fetched, Fetcher};
+use super::{temp_path, verify_sha256, FetchError, FetchRequest, Fetched, Fetcher, ProgressFn};
 use async_trait::async_trait;
 use futures::StreamExt;
 use sha2::{Digest, Sha256};
@@ -54,6 +54,14 @@ impl Fetcher for HttpFetcher {
     }
 
     async fn fetch(&self, request: &FetchRequest) -> Result<Fetched, FetchError> {
+        self.fetch_with_progress(request, &|_: u64| {}).await
+    }
+
+    async fn fetch_with_progress(
+        &self,
+        request: &FetchRequest,
+        progress: &ProgressFn<'_>,
+    ) -> Result<Fetched, FetchError> {
         let response = self
             .client
             .get(&request.address.uri)
@@ -69,7 +77,7 @@ impl Fetcher for HttpFetcher {
         }
 
         let temp = temp_path(&request.destination);
-        match download(response, &temp, request).await {
+        match download(response, &temp, request, progress).await {
             Ok(fetched) => Ok(fetched),
             Err(error) => {
                 // Never leave a partial download behind.
@@ -85,6 +93,7 @@ async fn download(
     response: reqwest::Response,
     temp: &Path,
     request: &FetchRequest,
+    progress: &ProgressFn<'_>,
 ) -> Result<Fetched, FetchError> {
     if let Some(parent) = temp.parent() {
         tokio::fs::create_dir_all(parent).await?;
@@ -99,6 +108,7 @@ async fn download(
         hasher.update(&chunk);
         file.write_all(&chunk).await?;
         total += chunk.len() as u64;
+        progress(total);
     }
     file.flush().await?;
 

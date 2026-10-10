@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `fetch`: optional progress reporting. `Fetcher::fetch_with_progress`,
+  `FetchRegistry::fetch_with_progress` / `fetch_merged_with_progress`, and
+  `Engine::fetch_with_progress` report the cumulative number of retrieved bytes
+  to a `ProgressFn` callback as chunks arrive, so a client can render a progress
+  bar. The default trait method is a no-op (command-delegated schemes keep
+  working); `HttpFetcher` reports per-chunk totals.
+
 ## [0.1.3] - 2026-10-10
 
 ### Added

@@ -23,7 +23,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 #[cfg(feature = "fetch")]
-use crate::fetch::{FetchError, FetchRegistry, Fetched};
+use crate::fetch::{FetchError, FetchRegistry, Fetched, ProgressFn};
 #[cfg(feature = "fetch")]
 use std::path::PathBuf;
 
@@ -197,6 +197,20 @@ impl Engine {
         destination: impl Into<PathBuf>,
     ) -> Result<Fetched, FetchError> {
         self.fetchers.fetch_merged(result, destination).await
+    }
+
+    /// Like [`Engine::fetch`], but report cumulative retrieved bytes to
+    /// `progress` as they arrive, so a client can render a progress bar.
+    #[cfg(feature = "fetch")]
+    pub async fn fetch_with_progress(
+        &self,
+        result: &MergedResult,
+        destination: impl Into<PathBuf>,
+        progress: &ProgressFn<'_>,
+    ) -> Result<Fetched, FetchError> {
+        self.fetchers
+            .fetch_merged_with_progress(result, destination, progress)
+            .await
     }
 
     /// Probe every provider with one query and classify its answer — for health
