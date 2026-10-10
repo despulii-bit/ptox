@@ -87,8 +87,8 @@ Validate any provider (any language) with the conformance suite:
 cargo run -p ptox-conformance -- -- <provider-command> [args...]
 ```
 
-It checks spawning, wire-line validity, result shape, error shape, and
-termination, and exits nonzero on failure.
+It checks spawning, wire-line validity, result shape, error shape, capability
+negotiation, and termination, and exits nonzero on failure.
 
 ## Tests and CI
 

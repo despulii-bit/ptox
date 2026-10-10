@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `ptox-conformance`: validate the optional `capabilities` response. A provider
+  that declines capability negotiation is treated as universal and still passes;
+  one that answers must return a well-formed capability object.
+
 ## [0.1.0] - 2026-10-10
 
 First public release.

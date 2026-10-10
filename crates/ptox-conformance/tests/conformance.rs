@@ -86,6 +86,41 @@ async fn crash_fails_the_clean_exit_check() {
         .any(|check| check.name == "exits_cleanly" && !check.passed));
 }
 
+#[tokio::test]
+async fn declared_capabilities_are_validated() {
+    let report = check_command(&fixture_bin(), &mode("capabilities"), &Options::default()).await;
+    assert!(report.passed(), "unexpected failures: {:?}", report.checks);
+    assert!(report
+        .checks
+        .iter()
+        .any(|check| check.name == "capabilities_well_formed" && check.passed));
+}
+
+#[tokio::test]
+async fn malformed_capabilities_fail() {
+    let report = check_command(
+        &fixture_bin(),
+        &mode("bad-capabilities"),
+        &Options::default(),
+    )
+    .await;
+    assert!(!report.passed());
+    assert!(report
+        .checks
+        .iter()
+        .any(|check| check.name == "capabilities_well_formed" && !check.passed));
+}
+
+#[tokio::test]
+async fn undeclared_capabilities_are_universal() {
+    let report = check_command(&fixture_bin(), &mode("good"), &Options::default()).await;
+    assert!(report.passed(), "unexpected failures: {:?}", report.checks);
+    assert!(report
+        .checks
+        .iter()
+        .any(|check| check.name == "capabilities_well_formed" && check.passed));
+}
+
 struct MockProvider {
     name: String,
 }

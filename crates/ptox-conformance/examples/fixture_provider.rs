@@ -1,7 +1,13 @@
 //! Test fixture provider used by the conformance suite's own tests.
 //!
-//! Usage: `fixture_provider [good|empty|invalid-json|bad-shape|hang]`
+//! Usage:
+//! `fixture_provider [good|empty|invalid-json|bad-shape|hang|oversized|crash|capabilities|bad-capabilities]`
+//!
 //! Reads one request line and writes NDJSON responses to stdout.
+//!
+//! `capabilities` and `bad-capabilities` only change the answer to a
+//! `capabilities` request; every other mode declines capability negotiation
+//! (answering `done`) and behaves as before for `search`.
 
 use std::io::{self, BufRead, Write};
 
@@ -11,8 +17,38 @@ fn main() {
     let mut line = String::new();
     let _ = io::stdin().lock().read_line(&mut line);
 
+    let method = serde_json::from_str::<serde_json::Value>(&line)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("method")
+                .and_then(|method| method.as_str())
+                .map(str::to_owned)
+        })
+        .unwrap_or_default();
+
     let stdout = io::stdout();
     let mut out = stdout.lock();
+
+    if method == "capabilities" {
+        match mode.as_str() {
+            "capabilities" => {
+                let _ = writeln!(
+                    out,
+                    r#"{{"id":1,"result":{{"query":["text","hashes"],"requires":[],"schemes":["https","magnet"]}}}}"#
+                );
+            }
+            "bad-capabilities" => {
+                // `query` must be a list of strings; a bare string is malformed.
+                let _ = writeln!(out, r#"{{"id":1,"result":{{"query":"not-a-list"}}}}"#);
+            }
+            _ => {
+                let _ = writeln!(out, r#"{{"id":1,"done":true}}"#);
+            }
+        }
+        let _ = out.flush();
+        return;
+    }
 
     match mode.as_str() {
         "empty" => {

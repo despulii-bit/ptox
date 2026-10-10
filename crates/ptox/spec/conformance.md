@@ -70,6 +70,9 @@ Using `vectors.json`:
    only.
 3. A provider that exits non-zero **without** emitting `done` MUST be reported as
    `Failure{code:"transport"}`, never as an empty (successful) result set.
+4. Capability negotiation is optional: a provider that declines a `capabilities`
+   request is treated as **universal**. A provider that answers MUST return a
+   well-formed capability object, and the suite MUST NOT fail one that declines.
 
 ## J. Ordering
 
