@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-10
+
 ### Added
 
 - `ptox-conformance`: validate the optional `capabilities` response. A provider
@@ -45,5 +47,6 @@ First public release.
 - **Spec** — the contract, conformance requirements, JSON Schema, and test
   vectors, shipped inside `crates/ptox/spec/`.
 
-[Unreleased]: https://github.com/despulii-bit/ptox/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/despulii-bit/ptox/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/despulii-bit/ptox/releases/tag/v0.1.1
 [0.1.0]: https://github.com/despulii-bit/ptox/releases/tag/v0.1.0
