@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   networks (Tor, I2P) can now reuse the HTTP fetcher's atomic writes, sha256
   verification, progress, retries, and timeouts instead of shelling out to
   `curl`. An invalid proxy URL fails the fetch rather than silently going direct.
+- `types`: `ErrorCode::unavailable()` — a well-known code for "the backing
+  service is not ready yet" (e.g. a network daemon still bootstrapping),
+  distinct from a real `transport` failure. `probe` classifies it as
+  `ProbeStatus::Pending`, which is not a failure, so a client can wait and retry.
 
 ## [0.3.0] - 2026-10-10
 

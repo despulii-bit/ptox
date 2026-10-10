@@ -98,8 +98,12 @@ Per-provider error. Stream items are `FileResult | Failure`.
 | `error` | `{code: string, message: string}` | **yes** |
 
 Well-known `code` values (open set; unknown codes MUST be tolerated):
-`timeout`, `unsupported`, `refused`, `transport`, `malformed`, `cancelled`,
-`internal`.
+`timeout`, `unsupported`, `refused`, `transport`, `unavailable`, `malformed`,
+`cancelled`, `internal`.
+
+`unavailable` means the provider (or a service it depends on, such as a network
+daemon still bootstrapping) is temporarily not ready. It is not a hard failure;
+a client MAY retry.
 
 ---
 

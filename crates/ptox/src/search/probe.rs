@@ -1,7 +1,7 @@
 //! Provider health probing: ask each provider one query and classify its answer.
 
 use crate::search::{Capabilities, SearchProvider};
-use crate::types::{ErrorInfo, FileQuery};
+use crate::types::{ErrorCode, ErrorInfo, FileQuery};
 use futures::StreamExt;
 use std::sync::Arc;
 use std::time::Duration;
@@ -15,6 +15,10 @@ pub enum ProbeStatus {
     Empty,
     /// Declared capabilities reject the probe query, so it was not asked.
     Skipped,
+    /// Reported `unavailable`: its backing service is not ready yet (e.g. a
+    /// network daemon still bootstrapping). Temporary — retry rather than treat
+    /// as a failure.
+    Pending,
     /// Returned an error.
     Failed(ErrorInfo),
     /// Did not finish within the timeout.
@@ -23,6 +27,7 @@ pub enum ProbeStatus {
 
 impl ProbeStatus {
     /// Whether the provider is unusable for this probe: it failed or timed out.
+    /// [`ProbeStatus::Pending`] is **not** a failure.
     pub fn is_failure(&self) -> bool {
         matches!(self, ProbeStatus::Failed(_) | ProbeStatus::Timeout)
     }
@@ -128,10 +133,14 @@ pub async fn probe(
             let status = if finished.is_err() {
                 ProbeStatus::Timeout
             } else if let Some(error) = failure {
-                ProbeStatus::Failed(ErrorInfo {
-                    code: error.code,
-                    message: error.message,
-                })
+                if error.code == ErrorCode::unavailable() {
+                    ProbeStatus::Pending
+                } else {
+                    ProbeStatus::Failed(ErrorInfo {
+                        code: error.code,
+                        message: error.message,
+                    })
+                }
             } else if count == 0 {
                 ProbeStatus::Empty
             } else {

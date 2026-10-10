@@ -191,3 +191,27 @@ async fn provider_capabilities_falls_back_to_universal_on_timeout() {
     assert!(!reports[0].answered);
     assert_eq!(reports[0].capabilities, Capabilities::universal());
 }
+
+/// Reports `unavailable` — e.g. a daemon still bootstrapping.
+struct Unavailable;
+
+impl SearchProvider for Unavailable {
+    fn name(&self) -> &str {
+        "warming"
+    }
+
+    fn search(&self, _query: &FileQuery) -> ResultStream<'_> {
+        Box::pin(async_stream::stream! {
+            yield Err(ProviderError::new(ErrorCode::unavailable(), "daemon bootstrapping"));
+        })
+    }
+}
+
+#[tokio::test]
+async fn probe_reports_pending_when_a_provider_is_not_ready() {
+    let providers: Vec<Arc<dyn SearchProvider>> = vec![Arc::new(Unavailable)];
+    let reports = probe(FileQuery::new("text"), providers, Duration::from_secs(5)).await;
+
+    assert_eq!(reports[0].status, ProbeStatus::Pending);
+    assert!(!reports[0].status.is_failure());
+}

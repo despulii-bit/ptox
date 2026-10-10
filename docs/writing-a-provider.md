@@ -111,6 +111,7 @@ backend's errors onto the well-known `ErrorCode`s:
 | Situation | Code |
 |---|---|
 | Network/socket/DNS/TLS failure | `ErrorCode::transport()` |
+| Backing service not ready (daemon bootstrapping) | `ErrorCode::unavailable()` |
 | Took too long | `ErrorCode::timeout()` |
 | Query you cannot answer | `ErrorCode::unsupported()` |
 | Policy, rate limit, refused | `ErrorCode::refused()` |

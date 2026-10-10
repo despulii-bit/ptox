@@ -373,6 +373,12 @@ impl ErrorCode {
     pub fn transport() -> Self {
         Self("transport".into())
     }
+    /// The provider (or its backing service) is not ready yet — for example a
+    /// network daemon that is still bootstrapping. Temporary: a client should
+    /// retry rather than treat it as a hard failure.
+    pub fn unavailable() -> Self {
+        Self("unavailable".into())
+    }
     /// The provider produced output that violated the wire contract.
     pub fn malformed() -> Self {
         Self("malformed".into())
