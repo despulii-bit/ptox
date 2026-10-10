@@ -65,6 +65,13 @@ ecosystem depends on.
 | `size` | int | no | Bytes. |
 | `extras` | `{string: any}` | no | Forward-compat; ignored if unknown. |
 
+`uri` is the address **on that network**, not a transport detail. For a network
+reached through a proxy or gateway, use the network's own scheme —
+`<scheme>://<host>[/path]` (e.g. `i2p://<b32>.i2p/file`, `tor://<onion>/file`,
+`ipfs://<cid>`) — and let the registered fetcher rewrite it to whatever transport
+reaches it (an HTTP proxy, a SOCKS proxy, a gateway). A provider states *where the
+content is*, not *how to dial it*.
+
 ---
 
 ## 4. `FileResult`

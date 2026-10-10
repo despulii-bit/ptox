@@ -22,6 +22,7 @@ mod file;
 mod http;
 #[cfg(feature = "ipfs")]
 mod ipfs;
+mod proxy;
 
 pub use command::CommandFetcher;
 #[cfg(feature = "file")]
@@ -29,6 +30,7 @@ pub use file::FileFetcher;
 pub use http::{HttpFetcher, ProxyConfig, RetryPolicy};
 #[cfg(feature = "ipfs")]
 pub use ipfs::{IpfsGatewayFetcher, DEFAULT_IPFS_GATEWAY};
+pub use proxy::{ProxyFetcher, DEFAULT_I2P_PROXY, DEFAULT_TOR_PROXY};
 
 use crate::merge::MergedResult;
 use crate::types::Address;

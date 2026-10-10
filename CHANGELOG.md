@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   service is not ready yet" (e.g. a network daemon still bootstrapping),
   distinct from a real `transport` failure. `probe` classifies it as
   `ProbeStatus::Pending`, which is not a failure, so a client can wait and retry.
+- `fetch`: `ProxyFetcher` — a generic fetcher for a proxy-based overlay scheme.
+  It rewrites `<scheme>://<host>[/path]` to `http://<host>[/path]` and routes
+  through a `ProxyConfig`, so `ProxyFetcher::i2p()` / `ProxyFetcher::tor()` are
+  one line to register and inherit the HTTP fetcher's atomic writes, sha256
+  verification, progress, retries, and timeouts. The contract now documents the
+  overlay addressing convention: the address is the network address, not the
+  transport URL.
 
 ## [0.3.0] - 2026-10-10
 

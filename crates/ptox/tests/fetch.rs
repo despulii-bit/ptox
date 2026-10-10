@@ -2,7 +2,7 @@
 
 use ptox::{
     sha256_file, sha256_hex, Address, CommandFetcher, FetchError, FetchRegistry, HttpFetcher,
-    ProxyConfig, RetryPolicy,
+    ProxyConfig, ProxyFetcher, RetryPolicy,
 };
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -1574,4 +1574,72 @@ async fn invalid_proxy_url_fails_loudly() {
         "got {error:?}"
     );
     assert!(!dest.exists());
+}
+
+#[tokio::test]
+async fn proxy_fetcher_rewrites_to_the_proxy() {
+    let body: &'static [u8] = b"overlay payload";
+    let (proxy, seen) = serve_proxy(body).await;
+    let dest = temp_dest("proxy-overlay");
+    let mut registry = FetchRegistry::new();
+    registry.register(Arc::new(ProxyFetcher::new("i2p", proxy)));
+
+    let fetched = registry
+        .fetch(
+            &Address::new("i2p", "i2p://example.invalid/report.pdf"),
+            dest.clone(),
+            Some(sha256_hex(body)),
+        )
+        .await
+        .expect("fetch through the overlay proxy");
+
+    assert_eq!(fetched.bytes, body.len() as u64);
+    // The proxy receives the rewritten transport request...
+    let request = seen.lock().expect("lock").clone();
+    assert!(
+        request.starts_with("GET http://example.invalid/report.pdf"),
+        "got: {request}"
+    );
+    // ...while the caller keeps the overlay address.
+    assert_eq!(fetched.address.uri, "i2p://example.invalid/report.pdf");
+    let _ = std::fs::remove_file(&dest);
+}
+
+#[tokio::test]
+async fn proxy_fetcher_rejects_a_foreign_scheme() {
+    let dest = temp_dest("proxy-foreign");
+    let mut registry = FetchRegistry::new();
+    registry.register(Arc::new(ProxyFetcher::new("i2p", "http://127.0.0.1:1")));
+
+    let error = registry
+        .fetch(
+            &Address::new("i2p", "http://example.org/x"),
+            dest.clone(),
+            None,
+        )
+        .await
+        .expect_err("a non-i2p address must be rejected");
+
+    assert!(
+        matches!(error, FetchError::InvalidAddress(_)),
+        "got {error:?}"
+    );
+    assert!(!dest.exists());
+}
+
+#[tokio::test]
+async fn proxy_fetcher_rejects_an_empty_host() {
+    let dest = temp_dest("proxy-empty");
+    let mut registry = FetchRegistry::new();
+    registry.register(Arc::new(ProxyFetcher::new("tor", "socks5h://127.0.0.1:1")));
+
+    let error = registry
+        .fetch(&Address::new("tor", "tor://"), dest.clone(), None)
+        .await
+        .expect_err("an address with no host must be rejected");
+
+    assert!(
+        matches!(error, FetchError::InvalidAddress(_)),
+        "got {error:?}"
+    );
 }

@@ -454,32 +454,36 @@ would cut off large downloads. A caller that needs one can wrap the fetch in
 ## Proxies and overlay networks (`i2p`, `tor`, …)
 
 Overlay networks do not expose content at a URL you can dial directly; you reach
-them through a local proxy. Give an [`HttpFetcher`] a [`ProxyConfig`] and every
-request goes through it, reusing all the machinery above — atomic writes, sha256
-verification, progress, retries, timeouts — instead of shelling out to `curl`:
+them through a local proxy (i2pd's HTTP proxy, Tor's SOCKS port). The SDK ships
+[`ProxyFetcher`]: it treats the address as `<scheme>://<host>[/path]` (e.g.
+`i2p://<b32>.i2p`, `tor://<onion>/file`), rewrites it to `http://<host>[/path]`,
+and routes it through the proxy — reusing all the machinery above (atomic writes,
+sha256 verification, progress, retries, timeouts) instead of shelling out to
+`curl`. Register one per overlay scheme:
 
 ```rust
-use ptox::{HttpFetcher, ProxyConfig};
+use ptox::{FetchRegistry, ProxyFetcher};
+use std::sync::Arc;
 
-// Tor: SOCKS5 with remote DNS, so `.onion` names resolve at the proxy.
-let tor = HttpFetcher::new().with_proxy(ProxyConfig::new("socks5h://127.0.0.1:9050"));
-
-// I2P: i2pd's HTTP proxy.
-let i2p = HttpFetcher::new().with_proxy(ProxyConfig::new("http://127.0.0.1:4444"));
-# let _ = (tor, i2p);
+let mut registry = FetchRegistry::new();
+registry.register(Arc::new(ProxyFetcher::tor()));  // socks5h://127.0.0.1:9050
+registry.register(Arc::new(ProxyFetcher::i2p()));  // http://127.0.0.1:4444
 ```
 
-`with_proxy` configures the *transport*. To expose it under an overlay scheme you
-wrap it in a small [`Fetcher`] whose `schemes()` is `["tor"]` / `["i2p"]` and
-whose `fetch` rewrites `tor://<host>/…` to `http://<host>/…` before delegating —
-exactly the shape of [`IpfsGatewayFetcher`]. Register that wrapper for the overlay
-scheme and leave the shared `http`/`https` entry **unproxied**, so clearnet stays
-direct.
+**Addressing convention:** for an overlay scheme, `Address.uri` is the network
+address — `<scheme>://<host>[/path]`, not the transport URL. The fetcher owns the
+rewrite, so the same address works whether the transport is an HTTP proxy, a
+SOCKS proxy, or a gateway (compare the `ipfs://` gateway fetcher). Register the
+overlay fetcher under its scheme and leave the shared `http`/`https` entry
+**unproxied**, so clearnet stays direct.
 
-Supported proxy schemes: `http://` / `https://` (HTTP proxy), `socks5://`
-(SOCKS5, local DNS), and `socks5h://` (SOCKS5 with remote DNS — required for
-overlay names). An invalid proxy URL fails the fetch with `FetchError::Network`
-rather than silently going direct.
+[`ProxyFetcher::new`] takes a scheme and a [`ProxyConfig`]; the transport is an
+[`HttpFetcher`] with [`HttpFetcher::with_proxy`], so
+[`ProxyFetcher::with_http_fetcher`] can add timeouts, retries, or a custom
+`User-Agent`. Supported proxy schemes: `http://` / `https://` (HTTP proxy),
+`socks5://` (SOCKS5, local DNS), and `socks5h://` (SOCKS5 with remote DNS —
+required for overlay names). An invalid proxy URL fails the fetch with
+`FetchError::Network` rather than silently going direct.
 
 ## Writing your own fetcher
 
