@@ -26,16 +26,24 @@ async-trait = "0.1"
 hex = { version = "0.4", optional = true }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"], optional = true }
 sha2 = { version = "0.10", optional = true }
+toml = { version = "0.8", optional = true }
 
 [features]
-default = ["fetch", "ipfs"]
+default = ["fetch", "ipfs", "config"]
 # Retrieval fabric (`Fetcher`, `FetchRegistry`, HTTP/command fetchers).
 fetch = ["dep:hex", "dep:reqwest", "dep:sha2"]
 # `ipfs://` retrieval through a configurable HTTP gateway (implies `fetch`).
 ipfs = ["fetch"]
+# Canonical provider/fetcher configuration schema + TOML loader (implies `fetch`).
+config = ["dep:toml", "fetch"]
 
 [[example]]
 name = "rust_provider"
+test = true
+
+[[example]]
+name = "config"
+required-features = ["config"]
 test = true
 
 [dev-dependencies]

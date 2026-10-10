@@ -33,7 +33,7 @@ repo per shared component — add a crate here.
 
 - `crates/ptox/spec/` — the contract, conformance requirements, test vectors, JSON
   Schema (shipped inside the `ptox` crate).
-- `crates/ptox` — **the SDK**, one crate with six modules:
+- `crates/ptox` — **the SDK**, one crate with seven modules:
   - `ptox::engine` — the high-level `Engine` (search + fetch), the client entry point.
   - `ptox::types` — data contracts (`FileQuery`, `FileResult`, `Address`, …).
   - `ptox::search` — the `SearchProvider` contract, `Capabilities`, and the fan-out engine.
@@ -43,11 +43,14 @@ repo per shared component — add a crate here.
   - `ptox::merge` — deduplicate + rank results from many providers, plus
     `suggest_filename` for safe client-side naming and the versioned `ResultRef`
     persistence handle.
+  - `ptox::config` — the canonical, versioned provider/fetcher TOML schema and
+    loader (feature `config`).
 - `crates/ptox-conformance` — provider conformance suite (library + CLI).
 
-A client depends on `ptox`. Retrieval (`fetch` and the `ipfs` gateway) is on by
-default; disable default features for a search-only build. A provider author
-uses `ptox::types` + `ptox::search` and tests with `ptox-conformance`.
+A client depends on `ptox`. Retrieval (`fetch` and the `ipfs` gateway) and the
+config loader are on by default; disable default features for a search-only
+build. A provider author uses `ptox::types` + `ptox::search` and tests with
+`ptox-conformance`.
 
 ## Development
 
@@ -84,6 +87,35 @@ cargo run -p ptox-conformance -- -- <provider-command> [args...]
 `crates/ptox-conformance/examples/fixture_provider.rs` is a provider that
 demonstrates the failure modes the suite detects.
 
+## Configuring a client
+
+Client wiring (which provider commands to run, which schemes to delegate to an
+external fetcher, and ranking weights) has a canonical, versioned TOML shape, so
+clients and tools agree on one format. Load it with `ptox::Config` and build the
+pieces a client needs:
+
+```toml
+version = 1
+
+[[provider]]
+name = "archive-org"
+program = "node"
+args = ["/opt/ptox/adapters/archive_org.js"]
+
+[ranking]
+weights = { "archive-org" = 1.2 }
+
+[fetch.commands.magnet]
+program = "aria2c"
+args = ["-d", "{dir}", "-o", "{name}", "{uri}"]
+```
+
+`Config::providers()` / `Config::fetch_registry()` / `Config::merge_options()`
+turn it into runnable pieces; `Config::to_toml_string()` writes it back out. The
+full field reference is in
+[**docs/configuration.md**](docs/configuration.md), with a runnable example in
+[`crates/ptox/examples/config.rs`](crates/ptox/examples/config.rs).
+
 ## Development files
 
 Agent/development scaffolding does **not** live here. It is tracked in a separate
@@ -95,7 +127,7 @@ Private, pre-release. Contract **v2** locked (with a JSON Schema). The SDK is a
 single `ptox` crate with `types` / `search` / `provider` / `fetch` modules (fetch
 behind a feature); the conformance suite is the `ptox-conformance` crate.
 Providers, clients, ranking policy, and indexing are separate; the SDK supplies a
-default merge/rank. 109 tests green.
+default merge/rank. 122 tests green.
 
 ## Contributing
 

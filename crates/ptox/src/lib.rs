@@ -23,11 +23,19 @@ pub mod types;
 #[cfg(feature = "fetch")]
 pub mod fetch;
 
+#[cfg(feature = "config")]
+pub mod config;
+
 pub use engine::{Engine, SearchReport, SearchStream};
 pub use merge::{merge, result_id, suggest_filename, MergeOptions, MergedResult, ResultRef};
 pub use provider::*;
 pub use search::*;
 pub use types::*;
+
+#[cfg(feature = "config")]
+pub use config::{
+    CommandConfig, Config, ConfigError, FetchConfig, ProviderConfig, RankingConfig, CONFIG_VERSION,
+};
 
 #[cfg(feature = "fetch")]
 pub use fetch::*;

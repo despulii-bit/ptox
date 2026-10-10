@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `config`: a canonical, versioned provider/fetcher configuration schema. The
+  new `Config` type (feature `config`, on by default) models `[[provider]]`
+  commands, `[ranking] weights`, and `[fetch.commands.<scheme>]` delegations in
+  one documented TOML shape. `Config::load` / `from_toml_str` parse and validate
+  it (supported `version`, unique non-empty provider names, non-empty programs,
+  finite non-negative weights), `to_toml_string` round-trips it back, and
+  `providers()` / `fetch_registry()` / `merge_options()` turn it into the pieces
+  a client needs. The shape is a stability contract like `MergedResult`'s:
+  fields are only added within a schema version, new fields default, and unknown
+  fields are ignored. See `docs/configuration.md` and
+  `crates/ptox/examples/config.rs`.
 - `merge::ResultRef`: a small, versioned persistence handle that decouples client
   state from the full `MergedResult` serde shape. It keeps only what is needed to
   retrieve and name a file — a stable `id`, `title`, `mimetype`, `size`,

@@ -41,7 +41,7 @@ cargo test --workspace
 - `crates/ptox/spec/core-contract.md` — the locked, language-neutral contract.
 - `crates/ptox/spec/conformance.md` — the behavior every implementation must satisfy.
 - `crates/ptox/spec/vectors.json` — language-neutral data-validation vectors.
-- `crates/ptox` — the SDK: `types`, `search`, `provider`, `fetch`, and `merge` modules.
+- `crates/ptox` — the SDK: `types`, `search`, `provider`, `fetch`, `merge`, and `config` modules.
 - `crates/ptox-conformance` — provider conformance suite.
 - Providers live in **separate repos** — never in the core.
 

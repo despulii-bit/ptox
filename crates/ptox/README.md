@@ -42,6 +42,11 @@ which keeps only the fetch-essential fields and carries its own schema version.
 suggests a safe name for the file (the title, else the preferred address, with
 illegal characters replaced).
 
+Client wiring has a canonical, versioned TOML schema in `ptox::config` (feature
+`config`, on by default): `Config::load` / `from_toml_str` parse and validate it,
+and `Config::providers()` / `fetch_registry()` / `merge_options()` build the
+pieces a client needs. See `docs/configuration.md` in the repository.
+
 ## Writing a provider
 
 Implement the `SearchProvider` trait and pass it to `fanout` or `Engine`. The
