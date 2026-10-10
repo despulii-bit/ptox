@@ -233,7 +233,7 @@ async fn engine_fetch_with_progress_reports() {
 }
 
 #[tokio::test]
-async fn command_fetcher_ignores_progress_and_still_fetches() {
+async fn command_fetcher_reports_final_progress() {
     let source = temp_dest("progress-source");
     std::fs::write(&source, b"payload").expect("write source");
     let dest = temp_dest("progress-command");
@@ -246,21 +246,84 @@ async fn command_fetcher_ignores_progress_and_still_fetches() {
         vec![source.to_string_lossy().into_owned(), "{dest}".to_owned()],
     )));
 
-    // The default trait method must accept a progress callback and still fetch.
+    let seen = std::sync::Mutex::new(Vec::new());
     let fetched = registry
         .fetch_with_progress(
             &Address::new("copy", "ignored"),
             dest.clone(),
             None,
-            &|_: u64| panic!("command fetcher must not report progress"),
+            &|bytes: u64| seen.lock().expect("lock").push(bytes),
         )
         .await
         .expect("fetch");
 
     assert_eq!(std::fs::read(&dest).expect("read"), b"payload");
     assert_eq!(fetched.bytes, 7);
+    let seen = seen.into_inner().expect("lock");
+    assert!(!seen.is_empty(), "command fetcher must report progress");
+    assert_eq!(
+        *seen.last().expect("last"),
+        7,
+        "final progress must equal the fetched size"
+    );
+    assert!(
+        seen.windows(2).all(|pair| pair[0] <= pair[1]),
+        "progress must never go backwards: {seen:?}"
+    );
     let _ = std::fs::remove_file(&source);
     let _ = std::fs::remove_file(&dest);
+}
+
+/// Proves progress is polled *while* the command runs, not just after it exits:
+/// the command waits for a marker that only the progress callback creates.
+#[tokio::test]
+async fn command_fetcher_polls_progress_while_the_command_runs() {
+    let dest = temp_dest("command-poll");
+    let gate = temp_dest("command-poll-gate");
+    let _ = std::fs::remove_file(&dest);
+    let _ = std::fs::remove_file(&gate);
+
+    let script = "printf '1234' > \"$1\"; while [ ! -e \"$2\" ]; do sleep 0.01; done; printf '5678' >> \"$1\"";
+    let mut registry = FetchRegistry::new();
+    registry.register(Arc::new(CommandFetcher::new(
+        "gated",
+        vec!["gated".to_owned()],
+        "sh",
+        vec![
+            "-c".to_owned(),
+            script.to_owned(),
+            "sh".to_owned(),
+            "{dest}".to_owned(),
+            gate.to_string_lossy().into_owned(),
+        ],
+    )));
+
+    let seen = std::sync::Mutex::new(Vec::new());
+    let fetched = registry
+        .fetch_with_progress(
+            &Address::new("gated", "ignored"),
+            dest.clone(),
+            None,
+            &|bytes: u64| {
+                seen.lock().expect("lock").push(bytes);
+                // Unblock the command once the first partial size is observed.
+                if bytes == 4 {
+                    let _ = std::fs::write(&gate, b"go");
+                }
+            },
+        )
+        .await
+        .expect("fetch");
+
+    assert_eq!(fetched.bytes, 8);
+    let seen = seen.into_inner().expect("lock");
+    assert!(
+        seen.contains(&4),
+        "the partial size must be reported while the command runs: {seen:?}"
+    );
+    assert_eq!(*seen.last().expect("last"), 8);
+    let _ = std::fs::remove_file(&dest);
+    let _ = std::fs::remove_file(&gate);
 }
 
 #[tokio::test]

@@ -107,10 +107,12 @@ pub trait Fetcher: Send + Sync {
     /// bytes to `progress` as they arrive.
     ///
     /// The default implementation ignores `progress` and calls
-    /// [`Fetcher::fetch`], so a fetcher that cannot observe progress (e.g. a
-    /// command-delegated scheme) need not implement this method. A caller that
-    /// needs progress should use this method; a caller that does not can keep
-    /// calling [`Fetcher::fetch`].
+    /// [`Fetcher::fetch`], so a fetcher that cannot observe progress need not
+    /// implement this method. A caller that needs progress should use this
+    /// method; a caller that does not can keep calling [`Fetcher::fetch`].
+    ///
+    /// `HttpFetcher` reports each received chunk; `CommandFetcher` polls the
+    /// destination file size while its command runs.
     async fn fetch_with_progress(
         &self,
         request: &FetchRequest,
