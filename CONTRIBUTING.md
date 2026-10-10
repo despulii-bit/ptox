@@ -37,6 +37,12 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
+`target/` can get large on a small disk. The workspace sets a storage-lean dev
+profile (`incremental = false`, and no debug info for dependencies) so builds stay
+small; `cargo clean` reclaims the rest. Prefer `cargo check` / `cargo clippy` while
+iterating over a full `cargo build`, and clean up when you're done with a big build
+(debug info in dependency artifacts is what fills a disk).
+
 ## Layout
 
 - `crates/ptox/spec/core-contract.md` — the locked, language-neutral contract.

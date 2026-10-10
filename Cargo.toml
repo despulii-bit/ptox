@@ -7,3 +7,13 @@ version = "0.5.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 rust-version = "1.88"
+
+# Storage-lean developer builds. `target/` is dominated by debug info in
+# dependency artifacts and by the incremental cache; neither is needed for
+# day-to-day work, and this environment is storage-constrained. Release builds
+# and downstream consumers are unaffected.
+[profile.dev]
+incremental = false
+
+[profile.dev.package."*"]
+debug = false
