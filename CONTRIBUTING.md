@@ -40,8 +40,9 @@ cargo test --workspace
 `target/` can get large on a small disk. The workspace sets a storage-lean dev
 profile (`incremental = false`, and no debug info for dependencies) so builds stay
 small; `cargo clean` reclaims the rest. Prefer `cargo check` / `cargo clippy` while
-iterating over a full `cargo build`, and clean up when you're done with a big build
-(debug info in dependency artifacts is what fills a disk).
+iterating — they emit metadata only and never link the test / example / doctest
+binaries that dominate `target/` — and run the full `cargo test` suite once, before
+committing. Clean up when you're done with a big build.
 
 ## Layout
 
