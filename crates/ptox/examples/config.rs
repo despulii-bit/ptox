@@ -1,7 +1,9 @@
 //! A runnable walkthrough of the canonical configuration schema.
 //!
 //! It parses a TOML config, validates it, and turns it into the pieces a client
-//! needs: providers, a fetch registry, and ranking options.
+//! needs: a ready-to-run `Engine` (providers + ranking + fetchers), plus the
+//! individual providers, fetch registry, and ranking options when a client wants
+//! them separately.
 //!
 //! ```sh
 //! cargo run -p ptox --example config
@@ -52,6 +54,10 @@ fn main() -> Result<(), ptox::ConfigError> {
         println!("provider: {}", provider.name());
     }
 
+    // The one-call path: providers, ranking weights, and fetchers wired up.
+    let engine = config.engine();
+    println!("engine providers: {}", engine.providers().len());
+
     let registry = config.fetch_registry();
     println!(
         "fetch schemes: http={} magnet={}",
@@ -94,5 +100,16 @@ mod tests {
         let registry = Config::from_toml_str(EXAMPLE).unwrap().fetch_registry();
         assert!(registry.fetcher_for("https").is_some());
         assert!(registry.fetcher_for("magnet").is_some());
+    }
+
+    #[test]
+    fn example_config_builds_an_engine() {
+        let engine = Config::from_toml_str(EXAMPLE).unwrap().engine();
+        let names: Vec<&str> = engine
+            .providers()
+            .iter()
+            .map(|provider| provider.name())
+            .collect();
+        assert_eq!(names, vec!["archive-org", "local"]);
     }
 }

@@ -101,6 +101,25 @@ local `file://` fetcher when the off-by-default `file` feature is on) plus one
 `CommandFetcher` per entry. Configured commands are registered **first**, so an
 explicitly configured scheme wins over a built-in handler for the same scheme.
 
+## Building an engine
+
+The canonical `load → search` path is one call. `Config::engine()` wires the
+configured providers, ranking weights, and fetch registry into a ready-to-run
+[`Engine`]:
+
+```rust
+let config = Config::load("/home/me/.config/ptox/providers.toml")?;
+let engine = config.engine();
+let report = engine.search(ptox::FileQuery::new("annual report")).await;
+```
+
+Use `Config::engine_with_options(Options)` to set client-side search policy
+(provider timeout, global limit/offset, concurrency) that the config
+deliberately does not carry. When a client needs the individual pieces — for
+example to add an in-process provider that is not a subprocess, or to register
+extra fetchers — build them from `providers()`, `merge_options()`, and
+`fetch_registry()` and assemble the `Engine` directly.
+
 ## Validation
 
 `Config::from_toml_str` and `Config::load` parse **and** validate. `validate`
@@ -129,4 +148,5 @@ the TOML loader.
 
 [`CommandFetcher`]: https://docs.rs/ptox/latest/ptox/fetch/struct.CommandFetcher.html
 [`CONFIG_VERSION`]: https://docs.rs/ptox/latest/ptox/config/constant.CONFIG_VERSION.html
+[`Engine`]: https://docs.rs/ptox/latest/ptox/struct.Engine.html
 [`SubprocessProvider`]: https://docs.rs/ptox/latest/ptox/provider/struct.SubprocessProvider.html

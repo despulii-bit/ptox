@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `config`: `Config::engine()` and `Config::engine_with_options(Options)` build a
+  ready-to-run `Engine` from the parsed config — the configured providers, the
+  ranking weights, and the fetch registry — so the documented `load → search`
+  path is one call instead of every client hand-wiring `Engine::new(...)
+  .with_options(...).with_weights(...).with_fetchers(...)`. The module doctest
+  and `examples/config.rs` now use it; `docs/configuration.md` gains a “Building
+  an engine” section.
+
 - `fetch`: opt-in HTTP timeouts. `HttpFetcher` now offers
   `with_connect_timeout(Duration)` (bounds the TCP/TLS connect phase) and
   `with_read_timeout(Duration)` (bounds the idle wait for more bytes, resetting

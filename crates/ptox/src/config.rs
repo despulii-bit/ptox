@@ -14,18 +14,9 @@
 //!
 //! ```no_run
 //! # fn main() -> Result<(), ptox::ConfigError> {
-//! use ptox::Config;
-//!
-//! let config = Config::load("~/.config/ptox/providers.toml")?;
-//! let providers = config.providers();          // Vec<SubprocessProvider>
-//! let registry = config.fetch_registry();      // http + configured commands
-//! let engine = ptox::Engine::new(
-//!     providers
-//!         .into_iter()
-//!         .map(|p| std::sync::Arc::new(p) as std::sync::Arc<dyn ptox::SearchProvider>)
-//!         .collect(),
-//! )
-//! .with_weights(config.merge_options().provider_weights);
+//! let config = ptox::Config::load("~/.config/ptox/providers.toml")?;
+//! let engine = config.engine();                // providers + weights + fetchers
+//! let registry = config.fetch_registry();      // the fetchers on their own
 //! # let _ = (registry, engine);
 //! # Ok(())
 //! # }
@@ -53,11 +44,14 @@
 //!
 //! See `crates/ptox/examples/config.rs` for a runnable example.
 
+use crate::engine::Engine;
 use crate::merge::MergeOptions;
 use crate::provider::SubprocessProvider;
+use crate::search::{Options, SearchProvider};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use thiserror::Error;
 
 #[cfg(all(feature = "fetch", feature = "ipfs"))]
@@ -303,6 +297,42 @@ impl Config {
         }
     }
 
+    /// Build a ready-to-run [`Engine`] from the config: the configured
+    /// providers, the ranking weights, and — with the `fetch` feature — the
+    /// configured [`FetchRegistry`].
+    ///
+    /// This is the canonical `load → search` path, replacing the hand-wiring of
+    /// [`Engine::new`] / [`Engine::with_options`] / [`Engine::with_weights`] /
+    /// [`Engine::with_fetchers`] that every client otherwise repeats:
+    ///
+    /// ```no_run
+    /// # async fn run() -> Result<(), ptox::ConfigError> {
+    /// let config = ptox::Config::load("~/.config/ptox/providers.toml")?;
+    /// let engine = config.engine();
+    /// let report = engine.search(ptox::FileQuery::new("annual report")).await;
+    /// # let _ = report;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn engine(&self) -> Engine {
+        self.engine_with_options(Options::default())
+    }
+
+    /// Like [`Config::engine`], but with explicit search [`Options`] (provider
+    /// timeout, global limit/offset, concurrency). The config does not carry
+    /// these policy knobs — they belong to the client.
+    pub fn engine_with_options(&self, options: Options) -> Engine {
+        let providers: Vec<Arc<dyn SearchProvider>> = self
+            .providers()
+            .into_iter()
+            .map(|provider| Arc::new(provider) as Arc<dyn SearchProvider>)
+            .collect();
+        Engine::new(providers)
+            .with_options(options)
+            .with_weights(self.merge_options().provider_weights)
+            .with_fetchers(self.fetch_registry())
+    }
+
     /// Build a [`FetchRegistry`] from the config: built-in `http`/`https` (and
     /// the `ipfs://` gateway when the `ipfs` feature is on, and the `file`
     /// fetcher when the `file` feature is on), plus one
@@ -466,5 +496,32 @@ args = ["-d", "{dir}", "{uri}"]
         let registry = sample().fetch_registry();
         assert!(registry.fetcher_for("magnet").is_some());
         assert!(registry.fetcher_for("https").is_some());
+    }
+
+    #[test]
+    fn engine_wires_configured_providers() {
+        let engine = sample().engine();
+        let names: Vec<&str> = engine
+            .providers()
+            .iter()
+            .map(|provider| provider.name())
+            .collect();
+        assert_eq!(names, vec!["local"]);
+    }
+
+    #[test]
+    fn engine_with_options_keeps_configured_providers() {
+        let options = Options {
+            limit: Some(3),
+            ..Options::default()
+        };
+        let engine = sample().engine_with_options(options);
+        assert_eq!(engine.providers().len(), 1);
+    }
+
+    #[test]
+    fn engine_of_empty_config_has_no_providers() {
+        let engine = Config::new().engine();
+        assert!(engine.providers().is_empty());
     }
 }
