@@ -18,7 +18,7 @@ name = "ptox-conformance"
 path = "src/main.rs"
 
 [dependencies]
-ptox = { version = "0.1", path = "../ptox", default-features = false }
+ptox = { version = "0.2", path = "../ptox", default-features = false }
 futures = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
