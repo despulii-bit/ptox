@@ -20,6 +20,10 @@ pub struct Options {
 /// Fan a query out to all providers and stream attributed outcomes as they
 /// arrive. One provider failing, timing out, or hanging never affects the others.
 ///
+/// Attribution is normalized here: a result with an empty `provider` is stamped
+/// with the emitting provider's name, so Rust provider authors (like wire
+/// providers) never have to set it themselves.
+///
 /// Dropping the returned stream cancels the in-flight providers.
 pub fn fanout(
     query: FileQuery,
@@ -48,7 +52,13 @@ pub fn fanout(
                 let forward = async {
                     while let Some(item) = results.next().await {
                         let outcome = match item {
-                            Ok(result) => Outcome::Result(result),
+                            Ok(mut result) => {
+                                // The host owns attribution (contract §9).
+                                if result.provider.is_empty() {
+                                    result.provider = name.clone();
+                                }
+                                Outcome::Result(result)
+                            }
                             Err(error) => {
                                 let _ = tx
                                     .send(Outcome::Failure(Failure {

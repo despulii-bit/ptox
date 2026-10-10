@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `fanout` now normalizes attribution: a result with an empty `provider` is
+  stamped with the emitting provider's name, so Rust provider authors no longer
+  have to set it themselves (matching the wire contract, where the host owns it).
+
 ## [0.1.1] - 2026-10-10
 
 ### Added

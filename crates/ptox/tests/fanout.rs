@@ -250,6 +250,36 @@ async fn results_are_attributed_and_shaped() {
     }
 }
 
+/// A provider that forgets to set `provider` (as wire providers may).
+struct Anonymous;
+
+impl SearchProvider for Anonymous {
+    fn name(&self) -> &str {
+        "anon"
+    }
+
+    fn search(&self, _query: &FileQuery) -> ResultStream<'_> {
+        Box::pin(async_stream::stream! {
+            yield Ok(FileResult::new(
+                "",
+                vec![Address::new("https", "https://example.org/x")],
+            ));
+        })
+    }
+}
+
+#[tokio::test]
+async fn fanout_attributes_anonymous_results() {
+    let providers: Vec<Arc<dyn SearchProvider>> = vec![Arc::new(Anonymous)];
+    let outcomes = collect(fanout(query(), providers, Options::default())).await;
+
+    let result = outcomes
+        .iter()
+        .find_map(|outcome| outcome.as_result())
+        .expect("a result");
+    assert_eq!(result.provider, "anon");
+}
+
 #[tokio::test]
 async fn core_never_fetches_addresses() {
     // The core has no fetch path: an address is returned untouched, never resolved.
