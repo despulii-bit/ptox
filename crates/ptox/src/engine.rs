@@ -15,8 +15,8 @@
 
 use crate::merge::{merge, MergeOptions, MergedResult};
 use crate::search::{
-    fanout, fanout_with_metrics, Capabilities, Metrics, Options, ProviderMetric, ProviderProbe,
-    ResultStream, SearchProvider,
+    fanout, fanout_with_metrics, Capabilities, Metrics, Options, ProviderCapabilities,
+    ProviderMetric, ProviderProbe, ResultStream, SearchProvider,
 };
 use crate::types::{Failure, FileQuery, Outcome};
 use futures::{Stream, StreamExt};
@@ -289,6 +289,22 @@ impl Engine {
         self.fetchers
             .fetch_merged_with_progress(result, destination, progress)
             .await
+    }
+
+    /// Ask every provider for its declared [`Capabilities`], without running a
+    /// query — for a `providers` or diagnostics command.
+    ///
+    /// Probes run concurrently and reuse the [`Engine::with_capability_cache`]
+    /// memo when enabled. Uses [`Options::timeout`] when set, otherwise a
+    /// 10-second default. A provider that does not answer before the timeout is
+    /// reported with [`Capabilities::universal`] and `answered: false`; this
+    /// call never fails. See [`crate::search::provider_capabilities`].
+    pub async fn provider_capabilities(&self) -> Vec<ProviderCapabilities> {
+        let timeout = self
+            .options
+            .timeout
+            .unwrap_or_else(|| Duration::from_secs(10));
+        crate::search::provider_capabilities(self.providers.clone(), timeout).await
     }
 
     /// Probe every provider with one query and classify its answer — for health

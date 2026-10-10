@@ -1,6 +1,6 @@
 //! Provider health probing: ask each provider one query and classify its answer.
 
-use crate::search::SearchProvider;
+use crate::search::{Capabilities, SearchProvider};
 use crate::types::{ErrorInfo, FileQuery};
 use futures::StreamExt;
 use std::sync::Arc;
@@ -35,6 +35,55 @@ pub struct ProviderProbe {
     pub provider: String,
     /// What happened when it was asked.
     pub status: ProbeStatus,
+}
+
+/// One provider's declared [`Capabilities`], as returned by
+/// [`provider_capabilities`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProviderCapabilities {
+    /// The provider's name.
+    pub provider: String,
+    /// What the provider declared, or [`Capabilities::universal`] if it did not
+    /// answer before the timeout.
+    pub capabilities: Capabilities,
+    /// Whether the provider answered in time. `false` means `capabilities` is
+    /// the universal fallback rather than a declaration.
+    pub answered: bool,
+}
+
+/// Ask each provider for its declared [`Capabilities`], concurrently, without
+/// running a query.
+///
+/// This is the query-free counterpart to [`probe`]: a `providers` or
+/// diagnostics command can list what each provider supports (query facets,
+/// requirements, and address schemes) before sending anything. A provider that
+/// does not answer within `timeout` is reported with
+/// [`Capabilities::universal`] and `answered: false`; the function never fails,
+/// so there is always a row per provider.
+///
+/// Results are in the order the providers were supplied, and an engine's
+/// [`crate::Engine::with_capability_cache`] memo is reused when enabled.
+pub async fn provider_capabilities(
+    providers: Vec<Arc<dyn SearchProvider>>,
+    timeout: Duration,
+) -> Vec<ProviderCapabilities> {
+    let checks = providers.into_iter().map(|provider| async move {
+        let name = provider.name().to_owned();
+        match tokio::time::timeout(timeout, provider.capabilities()).await {
+            Ok(capabilities) => ProviderCapabilities {
+                provider: name,
+                capabilities,
+                answered: true,
+            },
+            Err(_) => ProviderCapabilities {
+                provider: name,
+                capabilities: Capabilities::universal(),
+                answered: false,
+            },
+        }
+    });
+
+    futures::future::join_all(checks).await
 }
 
 /// Probe each provider with `query`, concurrently, respecting declared

@@ -274,6 +274,31 @@ async fn engine_passes_paging_selectors_to_providers() {
 }
 
 #[tokio::test]
+async fn engine_lists_provider_capabilities_and_reuses_the_cache() {
+    let (provider, calls, _) = Counting::new();
+    let engine = Engine::new(vec![
+        Arc::new(provider) as Arc<dyn SearchProvider>,
+        Arc::new(HashOnly),
+    ])
+    .with_capability_cache();
+
+    let first = engine.provider_capabilities().await;
+    let second = engine.provider_capabilities().await;
+
+    assert_eq!(first.len(), 2);
+    assert_eq!(first[0].provider, "counting");
+    assert!(first[0].answered);
+    assert_eq!(first[0].capabilities.query, vec!["text"]);
+    assert_eq!(first[1].provider, "hash-only");
+    assert_eq!(first[1].capabilities.schemes, vec!["magnet"]);
+
+    // The opt-in memo is reused by the second listing, so the provider's
+    // capabilities are computed once.
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(second[0].capabilities, first[0].capabilities);
+}
+
+#[tokio::test]
 async fn engine_reports_provider_failures() {
     let providers: Vec<Arc<dyn SearchProvider>> = vec![
         Arc::new(Mock {

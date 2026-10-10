@@ -8,5 +8,5 @@ mod provider;
 
 pub use capabilities::Capabilities;
 pub use fanout::{fanout, fanout_with_metrics, Metrics, Options, ProviderMetric};
-pub use probe::{probe, ProbeStatus, ProviderProbe};
+pub use probe::{probe, provider_capabilities, ProbeStatus, ProviderCapabilities, ProviderProbe};
 pub use provider::{ProviderError, ResultStream, SearchProvider};

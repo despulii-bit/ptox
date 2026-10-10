@@ -33,6 +33,10 @@ Capabilities are probed before every search. `Engine::with_capability_cache()`
 memoizes each provider's declarations (off by default) and
 `Engine::invalidate_capabilities()` drops the cache and asks each provider to
 re-probe, so a client with an expensive `capabilities()` pays it once.
+`Engine::provider_capabilities()` reports each provider's declared facets,
+requirements, and address schemes without running a query — a
+`providers`/diagnostics view; a provider that does not answer in time falls back
+to the universal default (`answered: false`).
 
 `FileQuery` selectors can be built fluently: `FileQuery::new("annual report")
 .with_mimetype("application/pdf").with_extension(".pdf")

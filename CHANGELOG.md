@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `search`: query-free capability introspection. `Engine::provider_capabilities()`
+  (and the free function `ptox::provider_capabilities`) asks every provider for
+  its declared `Capabilities` concurrently, without running a query, so a
+  `providers`/diagnostics command can list the query facets, requirements, and
+  address schemes each provider supports. A provider that does not answer within
+  the timeout is reported with the universal default and `answered: false`; the
+  call never fails, and the engine's opt-in capability cache is reused.
+
 - `config`: `Config::engine()` and `Config::engine_with_options(Options)` build a
   ready-to-run `Engine` from the parsed config — the configured providers, the
   ranking weights, and the fetch registry — so the documented `load → search`

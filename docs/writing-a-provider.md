@@ -97,7 +97,10 @@ change, override `SearchProvider::invalidate_capabilities` so
 `Engine::invalidate_capabilities()` can drop your cache and force a re-probe.
 Do not declare a facet you don't actually honor. If you declare any `schemes`,
 `ptox-conformance` checks that every address you emit uses one of them; declaring
-none keeps you universal (any scheme accepted).
+none keeps you universal (any scheme accepted). A client can call
+`Engine::provider_capabilities()` to list every provider's declarations without
+running a query; a provider that does not answer in time is shown with the
+universal default (`answered: false`), so this diagnostics call never fails.
 
 ## 4. Report failures with the right code
 
