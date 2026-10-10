@@ -115,11 +115,31 @@ The command **must create `{dest}`**. A command that writes elsewhere (for
 example `ipfs cat` writes to stdout) will otherwise look like a successful
 0-byte download or fail; see [`CommandFetcher`] for the contract.
 
-`Config::fetch_registry()` builds a registry from the config: built-in
+### `[fetch.proxies]` (table)
+
+Each key is an overlay scheme (e.g. `tor`, `i2p`) retrieved through a local
+proxy; the value is the proxy URL. Each entry registers a [`ProxyFetcher`] that
+rewrites `<scheme>://<host>[/path]` onto `http://<host>[/path]` and routes it
+through the proxy — so overlay retrieval gets atomic writes, sha256 verification,
+progress, retries, and timeouts for free.
+
+```toml
+[fetch.proxies]
+tor = "socks5h://127.0.0.1:9050"   # SOCKS5 with remote DNS
+i2p = "http://127.0.0.1:4444"      # i2pd HTTP proxy
+```
+
+Proxy schemes: `http://` / `https://`, `socks5://` (local DNS), `socks5h://`
+(remote DNS — required for overlay names). The key is the address scheme the
+provider emits; an empty proxy value is rejected by `Config::validate`.
+
+`Config::fetch_registry()` builds a registry from the config: registered
+**first** are `CommandFetcher`s (one per `[fetch.commands.<scheme>]`), then
+`ProxyFetcher`s (one per `[fetch.proxies]` entry), then the built-ins —
 `http`/`https` (and the `ipfs://` gateway when the `ipfs` feature is on, and the
-local `file://` fetcher when the off-by-default `file` feature is on) plus one
-`CommandFetcher` per entry. Configured commands are registered **first**, so an
-explicitly configured scheme wins over a built-in handler for the same scheme.
+local `file://` fetcher when the off-by-default `file` feature is on). So an
+explicitly configured command or proxy wins over a built-in handler for the same
+scheme.
 
 ## Building an engine
 
@@ -166,6 +186,7 @@ Enable the `config` feature to use this module (opt-in; it implies `fetch`). The
 default build omits the TOML loader and its `toml` dependency.
 
 [`CommandFetcher`]: https://docs.rs/ptox/latest/ptox/fetch/struct.CommandFetcher.html
+[`ProxyFetcher`]: https://docs.rs/ptox/latest/ptox/fetch/struct.ProxyFetcher.html
 [`CONFIG_VERSION`]: https://docs.rs/ptox/latest/ptox/config/constant.CONFIG_VERSION.html
 [`Engine`]: https://docs.rs/ptox/latest/ptox/struct.Engine.html
 [`SubprocessProvider`]: https://docs.rs/ptox/latest/ptox/provider/struct.SubprocessProvider.html

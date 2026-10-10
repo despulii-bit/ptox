@@ -40,6 +40,10 @@
 //! [fetch.commands.magnet]
 //! program = "aria2c"
 //! args = ["--seed-time=0", "-d", "{dir}", "-o", "{name}", "{uri}"]
+//!
+//! [fetch.proxies]
+//! tor = "socks5h://127.0.0.1:9050"
+//! i2p = "http://127.0.0.1:4444"
 //! ```
 //!
 //! See `crates/ptox/examples/config.rs` for a runnable example.
@@ -57,7 +61,7 @@ use thiserror::Error;
 #[cfg(all(feature = "fetch", feature = "ipfs"))]
 use crate::fetch::IpfsGatewayFetcher;
 #[cfg(feature = "fetch")]
-use crate::fetch::{CommandFetcher, FetchRegistry, HttpFetcher};
+use crate::fetch::{CommandFetcher, FetchRegistry, HttpFetcher, ProxyFetcher};
 
 /// The newest configuration schema version this build understands.
 pub const CONFIG_VERSION: u32 = 1;
@@ -123,6 +127,11 @@ pub struct FetchConfig {
     /// [`crate::fetch::CommandFetcher`]).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub commands: BTreeMap<String, CommandConfig>,
+    /// Proxy per overlay scheme, keyed by scheme (e.g. `tor`, `i2p`). Each
+    /// registers a [`crate::fetch::ProxyFetcher`] that rewrites
+    /// `<scheme>://<host>[/path]` and routes it through the proxy.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub proxies: BTreeMap<String, String>,
 }
 
 /// One scheme delegated to an external fetch command.
@@ -327,6 +336,19 @@ impl Config {
             }
         }
 
+        for (scheme, proxy) in &self.fetch.proxies {
+            if scheme.trim().is_empty() {
+                return Err(ConfigError::Invalid(
+                    "fetch proxy scheme must not be empty".to_owned(),
+                ));
+            }
+            if proxy.trim().is_empty() {
+                return Err(ConfigError::Invalid(format!(
+                    "fetch proxy for `{scheme}` must not be empty"
+                )));
+            }
+        }
+
         for (provider, weight) in &self.ranking.weights {
             if !weight.is_finite() || *weight < 0.0 {
                 return Err(ConfigError::Invalid(format!(
@@ -412,6 +434,12 @@ impl Config {
                 vec![scheme.clone()],
                 command.program.clone(),
                 command.args.clone(),
+            )));
+        }
+        for (scheme, proxy) in &self.fetch.proxies {
+            registry.register(std::sync::Arc::new(ProxyFetcher::new(
+                scheme.clone(),
+                proxy.clone(),
             )));
         }
         registry.register(std::sync::Arc::new(HttpFetcher::new()));
@@ -521,7 +549,10 @@ mod tests {
                 args: vec!["adapter.js".to_owned()],
                 env,
             }],
-            fetch: FetchConfig { commands },
+            fetch: FetchConfig {
+                commands,
+                proxies: BTreeMap::new(),
+            },
             ranking: RankingConfig { weights },
         }
     }
@@ -705,7 +736,10 @@ args = ["-d", "{dir}", "{uri}"]
         let config = Config {
             version: CONFIG_VERSION,
             providers: Vec::new(),
-            fetch: FetchConfig { commands },
+            fetch: FetchConfig {
+                commands,
+                proxies: BTreeMap::new(),
+            },
             ranking: RankingConfig::default(),
         };
 
@@ -769,5 +803,33 @@ args = ["-d", "{dir}", "{uri}"]
 
         let _ = std::fs::remove_file(&path);
         std::env::remove_var(&var);
+    }
+
+    #[test]
+    fn parses_and_registers_fetch_proxies() {
+        let config = Config::from_toml_str(
+            r#"
+[[provider]]
+name = "tor"
+program = "node"
+args = ["tor.js"]
+
+[fetch.proxies]
+tor = "socks5h://127.0.0.1:9050"
+i2p = "http://127.0.0.1:4444"
+"#,
+        )
+        .expect("valid config");
+        assert_eq!(config.fetch.proxies["tor"], "socks5h://127.0.0.1:9050");
+
+        let registry = config.fetch_registry();
+        assert!(registry.fetcher_for("tor").is_some());
+        assert!(registry.fetcher_for("i2p").is_some());
+    }
+
+    #[test]
+    fn rejects_an_empty_fetch_proxy() {
+        let error = Config::from_toml_str("[fetch.proxies]\ntor = \"  \"").unwrap_err();
+        assert!(matches!(error, ConfigError::Invalid(_)));
     }
 }

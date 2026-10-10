@@ -913,7 +913,7 @@ dependencies = [
 
 [[package]]
 name = "ptox"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -930,7 +930,7 @@ dependencies = [
 
 [[package]]
 name = "ptox-conformance"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-stream",
  "async-trait",
