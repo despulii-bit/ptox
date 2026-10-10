@@ -28,6 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
+- `docs/building-a-client.md`: a new **Cookbook** section with three
+  copy-pasteable recipes — incremental rendering with `search_stream`, a
+  client-side exponential-backoff retry loop around `Engine::fetch` that
+  distinguishes transient from permanent `FetchError`s, and wiring an overlay
+  proxy through `[fetch.proxies]` (both the TOML and the by-hand
+  `ProxyFetcher`/`FetchRegistry` path).
 - `docs/writing-a-provider.md`: a second worked example, a hash-only provider
   (`requires: ["hashes"]`, `magnet` addresses), showing the engine skipping it
   for keyword queries via `SearchReport::skipped` and the `ptox-conformance`

@@ -394,7 +394,152 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
-## 14. Checklist
+## 14. Cookbook
+
+Short, copy-pasteable recipes for the three things clients ask about most.
+
+### 14a. Render results incrementally with `search_stream`
+
+`Engine::search` waits for the slowest provider before it can rank anything. For
+an interactive list, stream instead and render each hit as it arrives — but keep
+the count yourself, because streamed outcomes are **not** merged or ranked:
+
+```rust
+use futures::StreamExt;
+use ptox::{Engine, FileQuery, Outcome};
+
+let mut stream = engine.search_stream(FileQuery::new("annual report")).await;
+if !stream.skipped.is_empty() {
+    eprintln!("skipped providers: {:?}", stream.skipped);
+}
+
+let mut shown = 0usize;
+while let Some(outcome) = stream.next().await {
+    match outcome {
+        Outcome::Result(result) => {
+            shown += 1;
+            let title = result.title.as_deref().unwrap_or("<untitled>");
+            // Render one row as it arrives; never assume a global order.
+            println!("{shown:>3}. [{}] {title}", result.providers.join(","));
+        }
+        Outcome::Failure(failure) => eprintln!(
+            "  {}: {} ({})",
+            failure.provider, failure.error.message, failure.error.code
+        ),
+    }
+}
+```
+
+Dropping the stream cancels the providers still running, so a user closing the
+results view stops the work. If you need a `Stream` trait object (for example to
+fan-in with another stream), call `stream.into_outcomes()`.
+
+### 14b. Retry a fetch with exponential backoff
+
+`Engine::fetch` already fails over across every mirror of a result, and on
+`HttpFetcher` a `RetryPolicy` retries *transport-level* transient failures within
+one address. A client-side loop covers the rest — a whole fetch that failed
+because every mirror was momentarily down, or a later process resuming the same
+destination. Classify before retrying: a malformed address, an unsupported
+scheme, a policy denial, or a hash mismatch will not improve by trying again.
+
+```rust
+use ptox::{Engine, FetchError, Fetched, MergedResult};
+use std::{path::Path, time::Duration};
+
+fn is_transient(error: &FetchError) -> bool {
+    match error {
+        FetchError::Network(_) => true,
+        // `AllFailed` keeps each attempt's error; retry if any was transient.
+        FetchError::AllFailed { errors, .. } => errors.iter().any(is_transient),
+        FetchError::Unsupported(_)
+        | FetchError::NoAddress
+        | FetchError::InvalidAddress(_)
+        | FetchError::AccessDenied(_)
+        | FetchError::HashMismatch { .. }
+        | FetchError::Command(_)
+        | FetchError::Io(_) => false,
+    }
+}
+
+async fn fetch_with_backoff(
+    engine: &Engine,
+    result: &MergedResult,
+    destination: &Path,
+) -> Result<Fetched, FetchError> {
+    let mut delay = Duration::from_millis(250);
+    let mut last_error = None;
+    for attempt in 1..=5 {
+        match engine.fetch(result, destination).await {
+            Ok(fetched) => return Ok(fetched),
+            Err(error) if attempt < 5 && is_transient(&error) => {
+                eprintln!("attempt {attempt} failed: {error}; retrying in {delay:?}");
+                tokio::time::sleep(delay).await;
+                delay = (delay * 2).min(Duration::from_secs(8));
+                last_error = Some(error);
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Err(last_error.expect("the loop runs at least once"))
+}
+```
+
+A few practical notes:
+
+- Add jitter (`delay + delay / 2 * pseudo_random()`) when many clients may retry
+  the same dead mirror at once.
+- Combine with `HttpFetcher::with_resume(true)` so a retry continues the same
+  `<destination>.part` instead of starting over (see [fetching.md](fetching.md)).
+- Retries write to the same `destination`; the fetchers write atomically and only
+  expose the finished file, so a crashed attempt never leaves a partial file
+  under the final name.
+
+### 14c. Route an overlay through a proxy (`tor`, `i2p`)
+
+Overlay providers emit `tor://` / `i2p://` addresses, and the SDK needs a local
+proxy to reach them. Add one line per scheme to the canonical config — no code:
+
+```toml
+version = 1
+
+[[provider]]
+name = "i2p-index"
+program = "node"
+args = ["/opt/ptox/adapters/i2p_index.js"]
+
+[fetch.proxies]
+i2p = "http://127.0.0.1:4444"      # i2pd HTTP proxy
+tor = "socks5h://127.0.0.1:9050"   # Tor SOCKS5 with remote DNS
+```
+
+```rust
+use ptox::Config;
+
+let config = Config::load("~/.config/ptox/providers.toml")?;
+let engine = config.engine(); // i2p:// and tor:// hits now fetch through the proxies
+```
+
+Each entry registers a `ProxyFetcher` for that scheme, while the shared
+`http`/`https` entries stay direct, so clearnet is unaffected. Use `socks5h://`
+(not `socks5://`) for overlay names: the proxy, not the client, must resolve
+them. To build the registry by hand instead:
+
+```rust
+use ptox::{FetchRegistry, ProxyFetcher};
+use std::sync::Arc;
+
+let mut registry = FetchRegistry::new();
+registry.register(Arc::new(ProxyFetcher::i2p())); // http://127.0.0.1:4444
+registry.register(Arc::new(ProxyFetcher::tor())); // socks5h://127.0.0.1:9050
+```
+
+`ProxyFetcher::with_http_fetcher` carries timeouts/retries onto the proxied
+transport. See [configuration.md](configuration.md), [fetching.md](fetching.md),
+and [troubleshooting.md](troubleshooting.md) if retrieval through the proxy
+fails.
+
+## 15. Checklist
 
 - [ ] Providers are configured/injected; the client ships none and discovers none.
 - [ ] A per-provider `timeout` is set.
