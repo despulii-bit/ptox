@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   each provider's configured weight, and `ResultRef::from_merged` /
   `to_merged` round-trips the fetch-essential fields through the JSON a client
   persists.
+- `Display` regression tests for the public error types. Every well-known
+  `ErrorCode` constructor and every `FetchError` / `ValidationError` variant is
+  pinned to an exact, non-empty message, so none can silently become blank or
+  start leaking extra detail.
 
 ### Documentation
 
