@@ -12,6 +12,7 @@
 //!
 //! Providers (network plugins) and clients (frontends) are built on top.
 #![forbid(unsafe_code)]
+#![warn(missing_docs)]
 
 pub mod engine;
 pub mod merge;

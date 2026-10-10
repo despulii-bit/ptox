@@ -33,6 +33,7 @@ pub struct SubprocessProvider {
 }
 
 impl SubprocessProvider {
+    /// A provider named `name` that runs `program` once per query.
     pub fn new(name: impl Into<String>, program: impl Into<PathBuf>) -> Self {
         Self {
             name: name.into(),
@@ -43,11 +44,13 @@ impl SubprocessProvider {
         }
     }
 
+    /// Append one command-line argument.
     pub fn arg(mut self, arg: impl Into<String>) -> Self {
         self.args.push(arg.into());
         self
     }
 
+    /// Append several command-line arguments.
     pub fn args<I, S>(mut self, args: I) -> Self
     where
         I: IntoIterator<Item = S>,
@@ -57,11 +60,13 @@ impl SubprocessProvider {
         self
     }
 
+    /// Set one environment variable for the child process.
     pub fn env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.env.push((key.into(), value.into()));
         self
     }
 
+    /// Set several environment variables for the child process.
     pub fn envs<I, K, V>(mut self, vars: I) -> Self
     where
         I: IntoIterator<Item = (K, V)>,

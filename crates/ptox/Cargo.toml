@@ -6,9 +6,13 @@ edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 repository = "https://github.com/despulii-bit/ptox"
+documentation = "https://docs.rs/ptox"
 readme = "README.md"
 keywords = ["search", "file-search", "federation", "p2p", "sdk"]
 categories = ["network-programming"]
+
+[package.metadata.docs.rs]
+all-features = true
 
 [dependencies]
 async-stream = "0.3"

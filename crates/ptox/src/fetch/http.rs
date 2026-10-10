@@ -18,6 +18,7 @@ pub struct HttpFetcher {
 }
 
 impl HttpFetcher {
+    /// A fetcher for `http`/`https` using the default `User-Agent`.
     pub fn new() -> Self {
         Self::with_user_agent(DEFAULT_USER_AGENT)
     }

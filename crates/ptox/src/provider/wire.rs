@@ -20,10 +20,15 @@ pub const MAX_LINE_BYTES: usize = 8 * 1024 * 1024;
 /// Errors from reading a bounded NDJSON line.
 #[derive(Debug, thiserror::Error)]
 pub enum WireReadError {
+    /// The underlying reader failed.
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
+    /// The line exceeded the configured bound before a newline was found.
     #[error("wire line exceeded {limit} bytes")]
-    TooLong { limit: usize },
+    TooLong {
+        /// The maximum number of bytes allowed.
+        limit: usize,
+    },
 }
 
 /// Read one newline-terminated line, erroring if it exceeds `max` bytes.
@@ -80,10 +85,17 @@ where
 #[allow(clippy::large_enum_variant)] // a ~280-byte move beats a per-item allocation
 #[derive(Debug, Clone, PartialEq)]
 pub enum WireLine {
+    /// A search hit.
     Result(FileResult),
+    /// A provider error terminating the stream.
     Error(ErrorInfo),
+    /// The provider finished successfully.
     Done,
-    Invalid { message: String },
+    /// A line that could not be decoded; the provider is treated as malformed.
+    Invalid {
+        /// Why the line was rejected.
+        message: String,
+    },
 }
 
 #[derive(Serialize)]

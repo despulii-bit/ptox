@@ -29,3 +29,36 @@ jobs:
 
       - name: Test
         run: cargo test --workspace
+
+  package:
+    name: package (publish dry-run)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Proves the crate builds as it would be published, including the spec
+      # files shipped inside `crates/ptox/spec`. Does not upload anything.
+      - name: Publish dry-run
+        run: cargo publish --dry-run -p ptox
+
+  msrv:
+    name: MSRV (${{ matrix.rust }})
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check
+        run: cargo check --workspace --all-features
+    strategy:
+      matrix:
+        rust: ["1.88.0"]

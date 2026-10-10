@@ -11,14 +11,14 @@ fn read(path: &str) -> Value {
 fn schema() -> Value {
     read(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../spec/schema/wire.schema.json"
+        "/../ptox/spec/schema/wire.schema.json"
     ))
 }
 
 fn vectors() -> Value {
     read(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../spec/vectors.json"
+        "/../ptox/spec/vectors.json"
     ))
 }
 

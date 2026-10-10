@@ -207,7 +207,8 @@ A provider that does not answer is treated as universal.
 This is contract **v2**. Every request carries the wire protocol version in `v`;
 a provider that cannot speak it SHOULD fail with `unsupported`. Changes are
 additive where possible; breaking changes bump the version. Consumers MUST ignore
-unknown fields. The machine-readable schema is `spec/schema/wire.schema.json`.
+unknown fields. The machine-readable schema ships with the SDK at
+`spec/schema/wire.schema.json`.
 
 - **v2** — `mimetype` → `mimetypes` (list); added `extensions`, `filename`,
   `published_after`/`published_before`, `lang` to `FileQuery`; added `lang`,

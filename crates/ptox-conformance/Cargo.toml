@@ -5,14 +5,20 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
-publish = false
+repository = "https://github.com/despulii-bit/ptox"
+documentation = "https://docs.rs/ptox-conformance"
+keywords = ["search", "conformance", "testing", "p2p", "sdk"]
+categories = ["development-tools::testing"]
+
+[package.metadata.docs.rs]
+all-features = true
 
 [[bin]]
 name = "ptox-conformance"
 path = "src/main.rs"
 
 [dependencies]
-ptox = { path = "../ptox", default-features = false }
+ptox = { version = "0.1", path = "../ptox", default-features = false }
 futures = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -20,6 +26,5 @@ tokio = { version = "1", features = ["io-util", "macros", "process", "rt", "rt-m
 
 [dev-dependencies]
 async-stream = "0.3"
-ptox = { path = "../ptox", default-features = false }
 jsonschema = { version = "0.18", default-features = false }
-tokio = { version = "1", features = ["io-util", "macros", "process", "rt-multi-thread", "time"] }
+tokio = { version = "1", features = ["io-util", "macros", "process", "rt", "rt-multi-thread", "time"] }

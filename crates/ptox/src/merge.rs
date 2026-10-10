@@ -10,18 +10,25 @@ use std::collections::HashMap;
 /// One file, possibly seen by several providers, with the best address first.
 #[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct MergedResult {
+    /// Human-readable title, taken from the first source that had one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+    /// Size in bytes, taken from the first source that had one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub size: Option<u64>,
+    /// Media type of the content (e.g. `application/pdf`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mimetype: Option<String>,
+    /// Language of the content (BCP 47).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lang: Option<String>,
+    /// When the content was published (RFC 3339 UTC).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub published: Option<String>,
+    /// When a provider last saw it available (RFC 3339 UTC).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_seen: Option<String>,
+    /// Union of the sources' content hashes, keyed by algorithm name.
     #[serde(default, skip_serializing_if = "HashAlgos::is_empty")]
     pub hashes: HashAlgos,
     /// Every provider that returned this file (sorted, deduplicated).
@@ -32,6 +39,7 @@ pub struct MergedResult {
     pub score: f64,
 }
 
+/// Ranking policy for [`merge`], supplied by the caller.
 #[derive(Debug, Clone, Default)]
 pub struct MergeOptions {
     /// Per-provider ranking weight (default `1.0`). Client-supplied policy.

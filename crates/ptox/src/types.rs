@@ -1,3 +1,7 @@
+//! The data contracts shared by every ptox component: queries, results,
+//! addresses, failures, and the structural validation used across the wire
+//! boundary.
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -18,6 +22,7 @@ pub type HashAlgos = HashMap<String, String>;
 pub struct FileQuery {
     /// Free-text keywords. May be empty when another selector is present.
     pub text: String,
+    /// Content hashes to look up directly, keyed by algorithm name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hashes: Option<HashAlgos>,
     /// Accepted media types: full (`application/pdf`), top-level (`image`), or
@@ -30,8 +35,10 @@ pub struct FileQuery {
     /// Filename or glob pattern (e.g. `*annual*report*.pdf`). Best-effort.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub filename: Option<String>,
+    /// Minimum size in bytes, inclusive.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub size_min: Option<u64>,
+    /// Maximum size in bytes, inclusive.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub size_max: Option<u64>,
     /// Only results published at/after this instant (RFC 3339 UTC).
@@ -46,11 +53,13 @@ pub struct FileQuery {
     /// Max results per provider (best-effort).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub limit: Option<u32>,
+    /// Provider-specific extras; the core never interprets them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<Extras>,
 }
 
 impl FileQuery {
+    /// A query for `text`, with every other selector unset.
     pub fn new(text: impl Into<String>) -> Self {
         Self {
             text: text.into(),
@@ -74,16 +83,21 @@ impl FileQuery {
 pub struct Address {
     /// Dispatch key. Open set: `http`, `magnet`, `ipfs`, `i2p`, `freenet`, ...
     pub scheme: String,
+    /// The URI a fetcher for `scheme` knows how to resolve.
     pub uri: String,
+    /// Content hashes, keyed by algorithm name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hashes: Option<HashAlgos>,
+    /// Size in bytes, when known.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub size: Option<u64>,
+    /// Provider-specific extras; ignored by the core.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<Extras>,
 }
 
 impl Address {
+    /// An address with `scheme` and `uri` set and no optional metadata.
     pub fn new(scheme: impl Into<String>, uri: impl Into<String>) -> Self {
         Self {
             scheme: scheme.into(),
@@ -102,14 +116,18 @@ pub struct FileResult {
     /// Providers MAY omit this on the wire; the host sets it (contract §9).
     #[serde(default)]
     pub provider: String,
+    /// Human-readable title, if the provider has one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
     /// Ways to obtain the content. Never empty.
     pub addresses: Vec<Address>,
+    /// Size in bytes, when known.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub size: Option<u64>,
+    /// Content hashes, keyed by algorithm name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hashes: Option<HashAlgos>,
+    /// Media type of the content (e.g. `application/pdf`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mimetype: Option<String>,
     /// Language of the content (BCP 47).
@@ -130,6 +148,7 @@ pub struct FileResult {
 }
 
 impl FileResult {
+    /// A result from `provider` obtainable via `addresses`.
     pub fn new(provider: impl Into<String>, addresses: Vec<Address>) -> Self {
         Self {
             provider: provider.into(),
@@ -153,27 +172,35 @@ impl FileResult {
 pub struct ErrorCode(pub String);
 
 impl ErrorCode {
+    /// Wrap an arbitrary code string.
     pub fn new(code: impl Into<String>) -> Self {
         Self(code.into())
     }
+    /// The provider exceeded its time budget.
     pub fn timeout() -> Self {
         Self("timeout".into())
     }
+    /// The provider cannot answer this query.
     pub fn unsupported() -> Self {
         Self("unsupported".into())
     }
+    /// The provider refused to answer (policy, rate limit).
     pub fn refused() -> Self {
         Self("refused".into())
     }
+    /// A transport/network failure.
     pub fn transport() -> Self {
         Self("transport".into())
     }
+    /// The provider produced output that violated the wire contract.
     pub fn malformed() -> Self {
         Self("malformed".into())
     }
+    /// The query was cancelled before it finished.
     pub fn cancelled() -> Self {
         Self("cancelled".into())
     }
+    /// An error internal to the provider.
     pub fn internal() -> Self {
         Self("internal".into())
     }
@@ -197,16 +224,21 @@ impl From<String> for ErrorCode {
     }
 }
 
+/// A machine-readable error code plus a human-readable message.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ErrorInfo {
+    /// The error category (see [`ErrorCode`]).
     pub code: ErrorCode,
+    /// A short, non-empty explanation. Never carries secrets.
     pub message: String,
 }
 
 /// A per-provider failure. One provider failing never affects the others.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Failure {
+    /// The provider that failed.
     pub provider: String,
+    /// What went wrong.
     pub error: ErrorInfo,
 }
 
@@ -214,11 +246,14 @@ pub struct Failure {
 #[allow(clippy::large_enum_variant)] // a ~280-byte move beats a per-item allocation
 #[derive(Debug, Clone, PartialEq)]
 pub enum Outcome {
+    /// A search hit.
     Result(FileResult),
+    /// A provider-level failure.
     Failure(Failure),
 }
 
 impl Outcome {
+    /// The provider this outcome is attributed to.
     pub fn provider(&self) -> &str {
         match self {
             Outcome::Result(result) => &result.provider,
@@ -226,6 +261,7 @@ impl Outcome {
         }
     }
 
+    /// The hit, if this is a [`Outcome::Result`].
     pub fn as_result(&self) -> Option<&FileResult> {
         match self {
             Outcome::Result(result) => Some(result),
@@ -233,6 +269,7 @@ impl Outcome {
         }
     }
 
+    /// The failure, if this is a [`Outcome::Failure`].
     pub fn as_failure(&self) -> Option<&Failure> {
         match self {
             Outcome::Result(_) => None,
@@ -243,17 +280,27 @@ impl Outcome {
 
 /// Structural validation for contract types.
 pub trait Validate {
+    /// Check the invariants the contract requires for this value.
     fn validate(&self) -> Result<(), ValidationError>;
 }
 
+/// The ways a contract value can be structurally invalid.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ValidationError {
+    /// A field that must be non-empty is empty.
     #[error("field `{0}` must not be empty")]
     Empty(&'static str),
+    /// A result carried no addresses.
     #[error("`addresses` must not be empty")]
     NoAddresses,
+    /// A query's `size_min` was greater than its `size_max`.
     #[error("size_min ({min}) must not exceed size_max ({max})")]
-    SizeRange { min: u64, max: u64 },
+    SizeRange {
+        /// The lower bound.
+        min: u64,
+        /// The upper bound.
+        max: u64,
+    },
 }
 
 impl Validate for FileQuery {

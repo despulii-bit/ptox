@@ -27,7 +27,9 @@ use std::path::PathBuf;
 
 /// The outcome of one search: ranked results plus per-provider failures.
 pub struct SearchReport {
+    /// Ranked, deduplicated hits across every provider that answered.
     pub results: Vec<MergedResult>,
+    /// One entry per provider that failed; never aborts the search.
     pub failures: Vec<Failure>,
     /// Providers skipped because their declared capabilities reject the query.
     pub skipped: Vec<String>,
@@ -43,6 +45,8 @@ pub struct Engine {
 }
 
 impl Engine {
+    /// An engine over `providers` with default search options (and, with the
+    /// `fetch` feature, the default fetchers).
     #[cfg(feature = "fetch")]
     pub fn new(providers: Vec<Arc<dyn SearchProvider>>) -> Self {
         Self {
@@ -53,6 +57,7 @@ impl Engine {
         }
     }
 
+    /// An engine over `providers` with default search options.
     #[cfg(not(feature = "fetch"))]
     pub fn new(providers: Vec<Arc<dyn SearchProvider>>) -> Self {
         Self {
@@ -62,22 +67,26 @@ impl Engine {
         }
     }
 
+    /// Override the [`Options`] used for searches.
     pub fn with_options(mut self, options: Options) -> Self {
         self.options = options;
         self
     }
 
+    /// Set per-provider ranking weights, as consumed by [`crate::merge`].
     pub fn with_weights(mut self, provider_weights: HashMap<String, f64>) -> Self {
         self.provider_weights = provider_weights;
         self
     }
 
+    /// Replace the retrieval registry used by [`Engine::fetch`].
     #[cfg(feature = "fetch")]
     pub fn with_fetchers(mut self, fetchers: FetchRegistry) -> Self {
         self.fetchers = fetchers;
         self
     }
 
+    /// The providers this engine was built with.
     pub fn providers(&self) -> &[Arc<dyn SearchProvider>] {
         &self.providers
     }

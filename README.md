@@ -31,7 +31,8 @@ repo per shared component — add a crate here.
 
 ## Layout
 
-- `spec/` — the contract, conformance requirements, test vectors, JSON Schema.
+- `crates/ptox/spec/` — the contract, conformance requirements, test vectors, JSON
+  Schema (shipped inside the `ptox` crate).
 - `crates/ptox` — **the SDK**, one crate with six modules:
   - `ptox::engine` — the high-level `Engine` (search + fetch), the client entry point.
   - `ptox::types` — data contracts (`FileQuery`, `FileResult`, `Address`, …).
@@ -41,8 +42,9 @@ repo per shared component — add a crate here.
   - `ptox::merge` — deduplicate + rank results from many providers.
 - `crates/ptox-conformance` — provider conformance suite (library + CLI).
 
-A client depends on `ptox` (enable the `fetch` feature for retrieval). A provider
-author uses `ptox::types` + `ptox::search` and tests with `ptox-conformance`.
+A client depends on `ptox`. Retrieval (the `fetch` feature) is on by default;
+disable default features for a search-only build. A provider author uses
+`ptox::types` + `ptox::search` and tests with `ptox-conformance`.
 
 ## Development
 
@@ -69,7 +71,7 @@ Test any provider against the contract with the conformance suite:
 cargo run -p ptox-conformance -- -- <provider-command> [args...]
 ```
 
-See `crates/ptox-provider/examples/ndjson_provider.rs` for a minimal wire provider
+See `crates/ptox/examples/ndjson_provider.rs` for a minimal wire provider
 and `crates/ptox-conformance/examples/fixture_provider.rs` for one that
 demonstrates the failure modes the suite detects.
 
@@ -84,7 +86,7 @@ Private, pre-release. Contract **v2** locked (with a JSON Schema). The SDK is a
 single `ptox` crate with `types` / `search` / `provider` / `fetch` modules (fetch
 behind a feature); the conformance suite is the `ptox-conformance` crate.
 Providers, clients, ranking policy, and indexing are separate; the SDK supplies a
-default merge/rank. 39 tests green.
+default merge/rank. 48 tests green.
 
 ## Contributing
 

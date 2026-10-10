@@ -14,6 +14,7 @@ pub struct CommandFetcher {
 }
 
 impl CommandFetcher {
+    /// A fetcher named `name` that runs `program` with `args` for each of `schemes`.
     pub fn new(
         name: impl Into<String>,
         schemes: Vec<String>,

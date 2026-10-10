@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/despulii-bit/ptox/spec/schema/wire.schema.json",
+  "$id": "https://github.com/despulii-bit/ptox/crates/ptox/spec/schema/wire.schema.json",
   "title": "ptox wire protocol v2",
   "description": "NDJSON messages exchanged between a ptox host and a provider.",
   "$defs": {

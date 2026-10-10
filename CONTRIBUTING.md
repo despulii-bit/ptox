@@ -25,7 +25,8 @@ nix-shell --run 'cargo test --workspace'
 
 Any stable Rust toolchain works too — the crates are plain Cargo, so `rustup`
 users need no Nix. The minimum supported version is the `rust-version` in
-`Cargo.toml`.
+`Cargo.toml` (currently 1.88, set by the dependency floor of the default
+`fetch` feature; CI verifies it).
 
 Useful commands:
 
@@ -37,9 +38,9 @@ cargo test --workspace
 
 ## Layout
 
-- `spec/core-contract.md` — the locked, language-neutral contract.
-- `spec/conformance.md` — the behavior every implementation must satisfy.
-- `spec/vectors.json` — language-neutral data-validation vectors.
+- `crates/ptox/spec/core-contract.md` — the locked, language-neutral contract.
+- `crates/ptox/spec/conformance.md` — the behavior every implementation must satisfy.
+- `crates/ptox/spec/vectors.json` — language-neutral data-validation vectors.
 - `crates/ptox` — the SDK: `types`, `search`, `provider`, `fetch`, and `merge` modules.
 - `crates/ptox-conformance` — provider conformance suite.
 
@@ -67,8 +68,8 @@ injected at construction, never per query.
 
 ### In any language
 
-Speak the NDJSON wire format (`spec/core-contract.md` §9) and wrap the program
-with `SubprocessProvider`. See
+Speak the NDJSON wire format (`crates/ptox/spec/core-contract.md` §9) and wrap the
+program with `SubprocessProvider`. See
 `crates/ptox/examples/ndjson_provider.rs` for a minimal example.
 
 ### Provider checklist

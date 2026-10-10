@@ -30,42 +30,64 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use thiserror::Error;
 
+/// Errors that can occur while retrieving an address.
 #[derive(Debug, Error)]
 pub enum FetchError {
+    /// No fetcher is registered for the address scheme.
     #[error("unsupported address scheme `{0}`")]
     Unsupported(String),
+    /// Filesystem error.
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
+    /// Network or protocol error.
     #[error("network error: {0}")]
     Network(String),
+    /// A helper command exited non-zero.
     #[error("command failed: {0}")]
     Command(String),
+    /// Retrieved bytes did not match the expected hash.
     #[error("hash mismatch: expected {expected}, got {actual}")]
-    HashMismatch { expected: String, actual: String },
+    HashMismatch {
+        /// The expected digest (lowercase hex).
+        expected: String,
+        /// The digest actually retrieved (lowercase hex).
+        actual: String,
+    },
+    /// The result carried no address to fetch.
     #[error("result has no address")]
     NoAddress,
 }
 
+/// A single retrieval job: one address, one destination path.
 #[derive(Debug, Clone)]
 pub struct FetchRequest {
+    /// The address to retrieve.
     pub address: Address,
+    /// Where the bytes should be written.
     pub destination: PathBuf,
     /// Expected sha256 (lowercase hex); verified after retrieval.
     pub expected_sha256: Option<String>,
 }
 
+/// The outcome of a successful retrieval.
 #[derive(Debug, Clone)]
 pub struct Fetched {
+    /// Path the bytes were written to.
     pub path: PathBuf,
+    /// Number of bytes written.
     pub bytes: u64,
+    /// sha256 of the retrieved bytes (lowercase hex), when computed.
     pub sha256: Option<String>,
 }
 
 /// One way of turning an address into bytes (one protocol).
 #[async_trait]
 pub trait Fetcher: Send + Sync {
+    /// A stable name for diagnostics.
     fn name(&self) -> &str;
+    /// The address schemes this fetcher handles.
     fn schemes(&self) -> &[String];
+    /// Retrieve `request`, writing the bytes to its destination.
     async fn fetch(&self, request: &FetchRequest) -> Result<Fetched, FetchError>;
 }
 
@@ -76,6 +98,7 @@ pub struct FetchRegistry {
 }
 
 impl FetchRegistry {
+    /// An empty registry with no fetchers.
     pub fn new() -> Self {
         Self::default()
     }
@@ -87,11 +110,13 @@ impl FetchRegistry {
         registry
     }
 
+    /// Register `fetcher`; its schemes become resolvable.
     pub fn register(&mut self, fetcher: Arc<dyn Fetcher>) -> &mut Self {
         self.fetchers.push(fetcher);
         self
     }
 
+    /// The first registered fetcher that handles `scheme`, if any.
     pub fn fetcher_for(&self, scheme: &str) -> Option<Arc<dyn Fetcher>> {
         self.fetchers
             .iter()
@@ -99,6 +124,7 @@ impl FetchRegistry {
             .cloned()
     }
 
+    /// Fetch `address` into `destination`, verifying `expected_sha256` if given.
     pub async fn fetch(
         &self,
         address: &Address,

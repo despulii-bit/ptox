@@ -2,7 +2,8 @@
 //!
 //! A contract conformance suite for ptox providers. It validates that a provider —
 //! written in Rust (`check_in_process`) or as a subprocess speaking the NDJSON
-//! wire format (`check_command`) — obeys `spec/core-contract.md`.
+//! wire format (`check_command`) — obeys the core contract
+//! (`../ptox/spec/core-contract.md`).
 //!
 //! Use it as a library or via the `ptox-conformance` binary:
 //!
@@ -11,6 +12,7 @@
 //! ```
 
 #![forbid(unsafe_code)]
+#![warn(missing_docs)]
 
 mod command;
 mod in_process;

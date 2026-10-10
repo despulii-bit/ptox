@@ -4,12 +4,12 @@ use serde::Serialize;
 use serde_json::Value;
 use std::fmt::Debug;
 
-/// Load the conformance vectors. `None` when the repository's `spec/` isn't
-/// adjacent (e.g. the published crate), in which case the tests are skipped.
-fn load() -> Option<Value> {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../spec/vectors.json");
-    let raw = std::fs::read_to_string(path).ok()?;
-    serde_json::from_str(&raw).ok()
+/// Load the conformance vectors. They ship with the crate at `spec/vectors.json`,
+/// so a missing or unreadable file is a packaging error, not a reason to skip.
+fn load() -> Value {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/spec/vectors.json");
+    let raw = std::fs::read_to_string(path).unwrap_or_else(|error| panic!("read {path}: {error}"));
+    serde_json::from_str(&raw).unwrap_or_else(|error| panic!("parse {path}: {error}"))
 }
 
 fn check_valid<T>(vectors: &Value, type_name: &str)
@@ -53,10 +53,7 @@ where
 
 #[test]
 fn valid_vectors_pass() {
-    let Some(vectors) = load() else {
-        eprintln!("spec/vectors.json not present; skipping");
-        return;
-    };
+    let vectors = load();
     check_valid::<FileQuery>(&vectors, "file_query");
     check_valid::<Address>(&vectors, "address");
     check_valid::<FileResult>(&vectors, "file_result");
@@ -65,10 +62,7 @@ fn valid_vectors_pass() {
 
 #[test]
 fn invalid_vectors_are_rejected() {
-    let Some(vectors) = load() else {
-        eprintln!("spec/vectors.json not present; skipping");
-        return;
-    };
+    let vectors = load();
     check_invalid::<FileQuery>(&vectors, "file_query");
     check_invalid::<Address>(&vectors, "address");
     check_invalid::<FileResult>(&vectors, "file_result");
