@@ -383,3 +383,34 @@ async fn engine_streams_outcomes_and_reports_skipped() {
     }
     assert_eq!(results, 1);
 }
+
+#[tokio::test]
+async fn engine_reports_invalid_provider_results_as_failures() {
+    struct Raw;
+
+    impl SearchProvider for Raw {
+        fn name(&self) -> &str {
+            "raw"
+        }
+
+        fn search(&self, _query: &FileQuery) -> ResultStream<'_> {
+            Box::pin(async_stream::stream! {
+                yield Ok(FileResult::new("raw", Vec::new()));
+                yield Ok(FileResult::new(
+                    "raw",
+                    vec![Address::new("https", "https://example.org/ok")],
+                ));
+            })
+        }
+    }
+
+    let report = Engine::new(vec![Arc::new(Raw) as Arc<dyn SearchProvider>])
+        .search(FileQuery::new("x"))
+        .await;
+
+    // The address-less result is rejected, the valid one is merged.
+    assert_eq!(report.results.len(), 1);
+    assert_eq!(report.failures.len(), 1);
+    assert_eq!(report.failures[0].provider, "raw");
+    assert_eq!(report.failures[0].error.code, ptox::ErrorCode::malformed());
+}

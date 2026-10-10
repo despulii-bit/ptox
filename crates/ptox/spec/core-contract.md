@@ -162,6 +162,11 @@ fanout(query: FileQuery, providers: [SearchProvider], options?: Options)
 10. **No identity.** `FileQuery` carries no user/session identifier.
 11. **Unknown fields tolerated** at every level.
 12. **Determinism not promised.** The same query may return different results.
+13. **Result validation at the boundary.** After attribution, a result that
+    violates this contract (empty `provider`/address scheme/URI, or no
+    `addresses`) MUST be rejected by the fan-out as a `Failure{code:"malformed"}`
+    attributed to its provider; it MUST NOT reach the client's merge/fetch path.
+    Rejecting one result MUST NOT discard the provider's other results.
 
 ---
 

@@ -81,6 +81,9 @@ A provider is one network or index. Two ways to plug one in:
 
 The end-to-end walkthrough — shape, capabilities, error codes, offline testing,
 and validation — is in [**docs/writing-a-provider.md**](docs/writing-a-provider.md).
+The fan-out enforces the result contract at runtime too: a structurally invalid
+result (no addresses, or an empty address scheme/URI) is reported as a
+`malformed` failure instead of reaching a client.
 
 Test any provider against the contract with the conformance suite:
 

@@ -120,6 +120,13 @@ backend's errors onto the well-known `ErrorCode`s:
 Do not return an empty stream for a query you can't serve — yield
 `unsupported` so the client can tell "no hits" from "cannot answer".
 
+At runtime the fan-out enforces the structural contract (`FileResult::validate`):
+a result with no `addresses`, or an address with an empty `scheme`/`uri`, is
+reported to the client as a `malformed` failure instead of being delivered. (The
+host fills in `provider`, so you may leave it empty.) Emitting one bad result
+does not discard your other results, but a client never sees the bad one —
+validate your own output in tests so this never fires.
+
 ## 5. Make it offline-testable
 
 Keep the network behind a trait so the provider can be driven by a fake in

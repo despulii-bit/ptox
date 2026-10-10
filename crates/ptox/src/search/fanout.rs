@@ -1,5 +1,5 @@
 use super::provider::SearchProvider;
-use crate::types::{ErrorCode, ErrorInfo, Failure, FileQuery, Outcome};
+use crate::types::{ErrorCode, ErrorInfo, Failure, FileQuery, Outcome, Validate};
 use async_stream::stream;
 use futures::{Stream, StreamExt};
 use std::sync::{Arc, Mutex};
@@ -30,15 +30,18 @@ pub struct Options {
 ///
 /// Metrics carry **counts and timings only** — never query text or result
 /// content — so a client can show progress and diagnostics without leaking what
-/// was searched for. A provider stops at its first error or timeout, so
-/// `failures` is at most one.
+/// was searched for. A provider error or timeout ends that provider's stream, so
+/// at most one of those is counted; each structurally invalid result the fan-out
+/// rejects ([`fanout_with_metrics`]) is counted as an additional failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProviderMetric {
     /// The provider's stable name.
     pub provider: String,
     /// Number of `Outcome::Result` items it emitted.
     pub results: usize,
-    /// Number of failures it reported (`timeout` included); at most one.
+    /// Number of failures attributed to it: a provider error or timeout (at most
+    /// one, since either ends the stream) plus one for each structurally invalid
+    /// result the fan-out rejected.
     pub failures: usize,
     /// Wall-clock time from the start of its search to its completion,
     /// including time spent waiting to acquire a concurrency permit.
@@ -114,6 +117,14 @@ pub fn fanout(
 /// A provider that finishes (or errors, or times out) records its metrics. If
 /// the returned stream is dropped early, an in-flight provider records whatever
 /// it streamed before its next send fails.
+///
+/// The fan-out also enforces the structural contract (`ptox::types::Validate`)
+/// at this boundary: a result missing an address, or carrying an empty address
+/// scheme/URI, is **not** streamed to the client. Instead it is reported as a
+/// `malformed` [`Outcome::Failure`] attributed to the emitting provider, and the
+/// provider keeps streaming, so one bad entry never discards its good results.
+/// Attribution is applied before validation, so a provider may omit `provider`
+/// on a result.
 pub fn fanout_with_metrics(
     query: FileQuery,
     providers: Vec<Arc<dyn SearchProvider>>,
@@ -151,6 +162,28 @@ pub fn fanout_with_metrics(
                                 // The host owns attribution (contract §9).
                                 if result.provider.is_empty() {
                                     result.provider = name.clone();
+                                }
+                                // Enforce the structural contract at the fan-out
+                                // boundary: a result the contract rejects (no
+                                // address, or an empty scheme/uri) must never
+                                // reach a client's merge/fetch path. Report it as
+                                // a provider failure and keep consuming, so one
+                                // bad entry doesn't discard the provider's good
+                                // results.
+                                if let Err(error) = result.validate() {
+                                    failure_count += 1;
+                                    let _ = tx
+                                        .send(Outcome::Failure(Failure {
+                                            provider: name.clone(),
+                                            error: ErrorInfo {
+                                                code: ErrorCode::malformed(),
+                                                message: format!(
+                                                    "provider returned an invalid result: {error}"
+                                                ),
+                                            },
+                                        }))
+                                        .await;
+                                    continue;
                                 }
                                 result_count += 1;
                                 Outcome::Result(result)

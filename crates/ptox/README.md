@@ -27,7 +27,10 @@ for metric in &report.metrics {
 
 `SearchReport::metrics` reports per-provider result/failure counts and elapsed
 time (no query or result content); `fanout_with_metrics` exposes the same
-`ptox::Metrics` collector to clients that drive providers directly.
+`ptox::Metrics` collector to clients that drive providers directly. The fan-out
+also enforces the result contract: a structurally invalid result (no `addresses`,
+or an address with an empty `scheme`/`uri`) is reported as a `malformed` failure
+instead of being delivered, while the provider's other results still pass.
 
 Capabilities are probed before every search. `Engine::with_capability_cache()`
 memoizes each provider's declarations (off by default) and

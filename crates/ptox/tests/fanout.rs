@@ -341,6 +341,89 @@ async fn fanout_attributes_anonymous_results() {
     assert_eq!(result.provider, "anon");
 }
 
+/// A provider that emits results exactly as given, without going through
+/// `FileResult::new`'s shape guarantees.
+struct Raw {
+    name: &'static str,
+    results: Vec<FileResult>,
+}
+
+impl SearchProvider for Raw {
+    fn name(&self) -> &str {
+        self.name
+    }
+
+    fn search(&self, _query: &FileQuery) -> ResultStream<'_> {
+        let results = self.results.clone();
+        Box::pin(async_stream::stream! {
+            for result in results {
+                yield Ok(result);
+            }
+        })
+    }
+}
+
+#[tokio::test]
+async fn structurally_invalid_results_become_malformed_failures() {
+    let metrics = Metrics::new();
+    // A result with no address, and one with an address that has an empty URI.
+    let no_address = FileResult::new("p", Vec::new());
+    let empty_uri = FileResult::new("p", vec![Address::new("https", "")]);
+    let valid = make_result("p", "good");
+    let provider: Vec<Arc<dyn SearchProvider>> = vec![Arc::new(Raw {
+        name: "p",
+        results: vec![no_address, empty_uri, valid],
+    })];
+
+    let outcomes = collect(fanout_with_metrics(
+        query(),
+        provider,
+        Options::default(),
+        &metrics,
+    ))
+    .await;
+
+    // Only the well-formed result reaches the client...
+    let results: Vec<&FileResult> = outcomes
+        .iter()
+        .filter_map(|outcome| outcome.as_result())
+        .collect();
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].addresses[0].uri, "https://example.org/good");
+
+    // ...and the two invalid results are reported as `malformed` failures.
+    let failures: Vec<&ptox::Failure> = outcomes
+        .iter()
+        .filter_map(|outcome| outcome.as_failure())
+        .collect();
+    assert_eq!(failures.len(), 2);
+    for failure in &failures {
+        assert_eq!(failure.provider, "p");
+        assert_eq!(failure.error.code, ErrorCode::malformed());
+    }
+
+    let snapshot = metrics.snapshot();
+    assert_eq!(snapshot.len(), 1);
+    assert_eq!(snapshot[0].results, 1);
+    assert_eq!(snapshot[0].failures, 2);
+}
+
+#[tokio::test]
+async fn provider_with_only_invalid_results_yields_no_results() {
+    let provider: Vec<Arc<dyn SearchProvider>> = vec![Arc::new(Raw {
+        name: "bad",
+        results: vec![FileResult::new("bad", Vec::new())],
+    })];
+    let outcomes = collect(fanout(query(), provider, Options::default())).await;
+
+    assert!(outcomes.iter().all(|outcome| outcome.as_result().is_none()));
+    assert_eq!(outcomes.len(), 1);
+    assert_eq!(
+        outcomes[0].as_failure().map(|failure| &failure.error.code),
+        Some(&ErrorCode::malformed())
+    );
+}
+
 #[tokio::test]
 async fn core_never_fetches_addresses() {
     // The core has no fetch path: an address is returned untouched, never resolved.

@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `search`: the fan-out now enforces the result contract at the boundary. After
+  host attribution, each `FileResult` is validated (`FileResult::validate`); a
+  result with no `addresses`, or an address with an empty `scheme`/`uri`, is
+  reported as a `Failure{code:"malformed"}` attributed to its provider instead of
+  being streamed into a client's merge/fetch path. One rejected result never
+  discards the provider's remaining results. This closes the gap where the
+  conformance suite checked result shape but the runtime accepted anything a
+  provider emitted. `spec/core-contract.md` §8.13 documents the requirement and
+  the provider guide spells out the invariant.
+
 - `ptox-conformance`: a `limit_honored` check. The suite now sends a probe query
   carrying a small `limit` and fails a provider that returns more results than
   the selector allows, closing the gap where `limit` was documented as an upper
