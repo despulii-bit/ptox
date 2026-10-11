@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-10
+
+### Added
+
+- **`access`** on `FileResult`, `MergedResult`, and `ResultRef`: how a source offers
+  a result — `download`, `borrow`, or `preview` — or unstated (`None`). Neutral
+  metadata a provider MAY set; the core never blocks a fetch. `merge` keeps the
+  **most available** across sources (download beats borrow beats preview), and a
+  client may filter or sort on it. Documented in the contract (§4) and the wire
+  schema.
+
+### Changed
+
+- Breaking (Rust API): `FileResult` and `MergedResult` gained a field. The
+  serialized shape is unchanged for readers — the field is `#[serde(default)]` and
+  omitted when unset — but struct literals must add it.
+
 ## [0.5.1] - 2026-10-10
 
 ### Added
@@ -382,7 +399,8 @@ First public release.
 - **Spec** — the contract, conformance requirements, JSON Schema, and test
   vectors, shipped inside `crates/ptox/spec/`.
 
-[Unreleased]: https://github.com/despulii-bit/ptox/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/despulii-bit/ptox/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/despulii-bit/ptox/releases/tag/v0.6.0
 [0.5.1]: https://github.com/despulii-bit/ptox/releases/tag/v0.5.1
 [0.5.0]: https://github.com/despulii-bit/ptox/releases/tag/v0.5.0
 [0.4.0]: https://github.com/despulii-bit/ptox/releases/tag/v0.4.0

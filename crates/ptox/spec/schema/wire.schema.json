@@ -66,6 +66,7 @@
         "lang": { "type": "string" },
         "published": { "type": "string" },
         "last_seen": { "type": "string" },
+        "access": { "type": "string", "enum": ["download", "borrow", "preview"] },
         "score": { "type": "number" },
         "raw": {}
       },
@@ -88,6 +89,7 @@
         "lang": { "type": "string" },
         "published": { "type": "string" },
         "last_seen": { "type": "string" },
+        "access": { "type": "string", "enum": ["download", "borrow", "preview"] },
         "score": { "type": "number" },
         "raw": {}
       },

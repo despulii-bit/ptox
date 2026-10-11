@@ -87,6 +87,7 @@ content is*, not *how to dial it*.
 | `lang` | string | no | BCP 47 language. |
 | `published` | string | no | RFC 3339 UTC. |
 | `last_seen` | string | no | RFC 3339 UTC. |
+| `access` | string | no | How the source offers it: `download` \| `borrow` \| `preview`. Omitted when unstated; a client may filter or sort on it (the core never blocks a fetch). |
 | `score` | number | no | Provider-local relevance; NOT comparable across providers. |
 | `raw` | `any` | no | Untouched original payload. Never interpreted by the core. |
 

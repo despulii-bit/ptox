@@ -82,6 +82,26 @@ fn multi_source_ranks_first() {
 }
 
 #[test]
+fn access_is_the_most_available_across_sources() {
+    use ptox::Access;
+
+    let mut borrow = result("a", "same", None, Some(1));
+    borrow.access = Some(Access::Borrow);
+    let mut download = result("b", "same", None, Some(1));
+    download.access = Some(Access::Download);
+
+    // They dedup (same title+size); access is the most available: a download.
+    let merged = merge([borrow, download], &MergeOptions::default());
+    assert_eq!(merged.len(), 1);
+    assert_eq!(merged[0].access, Some(Access::Download));
+
+    // Undeclared stays `None`.
+    let plain = result("c", "other", None, Some(2));
+    let merged = merge([plain], &MergeOptions::default());
+    assert_eq!(merged[0].access, None);
+}
+
+#[test]
 fn provider_weights_change_order() {
     let results = vec![
         result("a", "from-a.bin", Some("1111"), Some(1)),

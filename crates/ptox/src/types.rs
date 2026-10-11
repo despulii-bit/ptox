@@ -290,6 +290,22 @@ impl Address {
     }
 }
 
+/// How a source makes a result available.
+///
+/// Factual metadata a provider MAY set — **not** a policy: the core never blocks a
+/// fetch, and a client may filter or sort on it. `None` on a result means the
+/// provider did not say.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Access {
+    /// A direct download, no account or purchase.
+    Download,
+    /// Available by borrowing or with an account (e.g. a lending library).
+    Borrow,
+    /// A preview or snippet only.
+    Preview,
+}
+
 /// A normalized, attributed search hit.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FileResult {
@@ -320,6 +336,9 @@ pub struct FileResult {
     /// When the provider last saw it available (RFC 3339 UTC).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_seen: Option<String>,
+    /// How the source offers it (see [`Access`]), when the provider says.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub access: Option<Access>,
     /// Provider-local relevance. NOT comparable across providers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub score: Option<f64>,
@@ -341,6 +360,7 @@ impl FileResult {
             lang: None,
             published: None,
             last_seen: None,
+            access: None,
             score: None,
             raw: None,
         }

@@ -4,7 +4,7 @@
 //! [`crate::fanout`] and get a deduplicated, ranked list a client can display
 //! and fetch. Ranking weights are caller-supplied policy.
 
-use crate::types::{Address, FileResult, HashAlgos};
+use crate::types::{Access, Address, FileResult, HashAlgos};
 use std::collections::HashMap;
 
 /// One file, possibly seen by several providers, with the best address first.
@@ -48,6 +48,10 @@ pub struct MergedResult {
     /// When a provider last saw it available (RFC 3339 UTC).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_seen: Option<String>,
+    /// The most-available access any source declared: a direct download beats
+    /// borrowing, which beats a preview. `None` when no source said.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub access: Option<Access>,
     /// Union of the sources' content hashes, keyed by algorithm name.
     #[serde(default, skip_serializing_if = "HashAlgos::is_empty")]
     pub hashes: HashAlgos,
@@ -119,6 +123,9 @@ pub struct ResultRef {
     /// Size in bytes, when known.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub size: Option<u64>,
+    /// How the source offers it (see [`Access`]), when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub access: Option<Access>,
     /// Union of the sources' content hashes, keyed by algorithm name.
     #[serde(default, skip_serializing_if = "HashAlgos::is_empty")]
     pub hashes: HashAlgos,
@@ -145,6 +152,7 @@ impl ResultRef {
             title: result.title.clone(),
             mimetype: result.mimetype.clone(),
             size: result.size,
+            access: result.access,
             hashes: result.hashes.clone(),
             addresses: result.addresses.clone(),
         }
@@ -169,6 +177,7 @@ impl ResultRef {
             title: self.title.clone(),
             size: self.size,
             mimetype: self.mimetype.clone(),
+            access: self.access,
             hashes: self.hashes.clone(),
             addresses: self.addresses.clone(),
             ..MergedResult::default()
@@ -435,6 +444,7 @@ fn absorb(cluster: &mut MergedResult, result: FileResult) {
     if cluster.last_seen.is_none() {
         cluster.last_seen = result.last_seen;
     }
+    cluster.access = best_access(cluster.access, result.access);
     if let Some(hashes) = result.hashes {
         for (algorithm, value) in hashes {
             cluster.hashes.entry(algorithm).or_insert(value);
@@ -451,6 +461,22 @@ fn absorb(cluster: &mut MergedResult, result: FileResult) {
         {
             cluster.addresses.push(address);
         }
+    }
+}
+
+fn best_access(current: Option<Access>, incoming: Option<Access>) -> Option<Access> {
+    fn rank(access: Option<Access>) -> u8 {
+        match access {
+            Some(Access::Download) => 3,
+            Some(Access::Borrow) => 2,
+            Some(Access::Preview) => 1,
+            None => 0,
+        }
+    }
+    if rank(incoming) > rank(current) {
+        incoming
+    } else {
+        current
     }
 }
 
