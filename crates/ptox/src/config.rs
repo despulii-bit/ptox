@@ -132,6 +132,14 @@ pub struct FetchConfig {
     /// `<scheme>://<host>[/path]` and routes it through the proxy.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub proxies: BTreeMap<String, String>,
+    /// Cap on bytes fetched per HTTP(S) download (`None` = unbounded). See
+    /// [`crate::HttpFetcher::with_max_bytes`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_bytes: Option<u64>,
+    /// Refuse HTTP(S) requests to link-local / metadata hosts (SSRF guard). See
+    /// [`crate::HttpFetcher::with_deny_link_local`].
+    #[serde(default)]
+    pub deny_link_local: bool,
 }
 
 /// One scheme delegated to an external fetch command.
@@ -442,7 +450,16 @@ impl Config {
                 proxy.clone(),
             )));
         }
-        registry.register(std::sync::Arc::new(HttpFetcher::new()));
+        registry.register(std::sync::Arc::new({
+            let mut http = HttpFetcher::new();
+            if let Some(max_bytes) = self.fetch.max_bytes {
+                http = http.with_max_bytes(max_bytes);
+            }
+            if self.fetch.deny_link_local {
+                http = http.with_deny_link_local(true);
+            }
+            http
+        }));
         #[cfg(feature = "ipfs")]
         registry.register(std::sync::Arc::new(
             IpfsGatewayFetcher::with_default_gateway(),
@@ -552,6 +569,7 @@ mod tests {
             fetch: FetchConfig {
                 commands,
                 proxies: BTreeMap::new(),
+                ..FetchConfig::default()
             },
             ranking: RankingConfig { weights },
         }
@@ -739,6 +757,7 @@ args = ["-d", "{dir}", "{uri}"]
             fetch: FetchConfig {
                 commands,
                 proxies: BTreeMap::new(),
+                ..FetchConfig::default()
             },
             ranking: RankingConfig::default(),
         };
@@ -831,5 +850,17 @@ i2p = "http://127.0.0.1:4444"
     fn rejects_an_empty_fetch_proxy() {
         let error = Config::from_toml_str("[fetch.proxies]\ntor = \"  \"").unwrap_err();
         assert!(matches!(error, ConfigError::Invalid(_)));
+    }
+
+    #[test]
+    fn parses_the_fetch_policy() {
+        let config =
+            Config::from_toml_str("[fetch]\nmax_bytes = 1048576\ndeny_link_local = true\n")
+                .expect("valid config");
+        assert_eq!(config.fetch.max_bytes, Some(1_048_576));
+        assert!(config.fetch.deny_link_local);
+        // The default keeps the old behavior: unbounded, link-local allowed.
+        assert_eq!(FetchConfig::default().max_bytes, None);
+        assert!(!FetchConfig::default().deny_link_local);
     }
 }

@@ -308,6 +308,12 @@ hash passed as `expected_sha256`, which `fetch_merged` fills from a result's
 Malformed `ipfs://` URIs (wrong scheme, or no CID) fail with
 `FetchError::InvalidAddress`.
 
+For other value-addressed networks behind an HTTP gateway, [`GatewayFetcher`] is
+the generic form: `GatewayFetcher::new(scheme, prefix, gateways)` rewrites
+`<scheme>://<rest>` to `<gateway><prefix><rest>` — so FProxy is
+`GatewayFetcher::new("freenet", "/", ["http://127.0.0.1:8888"])` — with the same
+ordered-gateway failover.
+
 ## Local files (`file://`)
 
 Some providers are local: a catalogue scanner, an on-disk index, or a test mock
@@ -450,6 +456,27 @@ above).
 A total deadline (covering the whole body) is intentionally not exposed: it
 would cut off large downloads. A caller that needs one can wrap the fetch in
 `tokio::time::timeout`.
+
+## The fetch policy (`max_bytes`, `deny_link_local`)
+
+A provider's addresses are untrusted, so the fetcher can be given a policy:
+
+```no_run
+use ptox::HttpFetcher;
+
+let fetcher = HttpFetcher::new()
+    .with_max_bytes(64 * 1024 * 1024) // abort an oversized download
+    .with_deny_link_local(true);      // refuse cloud-metadata hosts
+```
+
+`with_max_bytes` caps the bytes written in a single fetch, enforced on the
+streamed body (so a lying `Content-Length` cannot get around it) and reported as
+`FetchError::TooLarge`; the partial is discarded. `with_deny_link_local` refuses an
+`http(s)` address whose host is a literal link-local/unspecified IP or a known
+`metadata` name, reported as `FetchError::Denied` — the SSRF path to cloud
+metadata. It sees literal hosts only (not what DNS resolves to); loopback and
+private LAN hosts are allowed. Both are off by default. In config:
+`[fetch] max_bytes = …` and `deny_link_local = true`.
 
 ## Proxies and overlay networks (`i2p`, `tor`, …)
 

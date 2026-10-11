@@ -396,6 +396,50 @@ async fn http_stream_error_removes_the_partial_file() {
 }
 
 #[tokio::test]
+async fn http_max_bytes_aborts_and_discards_an_oversized_download() {
+    let url = serve_once(b"0123456789abcdef").await; // 16 bytes
+    let dest = temp_dest("max-bytes");
+
+    let mut registry = FetchRegistry::new();
+    registry.register(Arc::new(HttpFetcher::new().with_max_bytes(4)));
+
+    let error = registry
+        .fetch(&Address::new("http", url), dest.clone(), None)
+        .await
+        .expect_err("a body over the cap must fail");
+
+    assert!(
+        matches!(error, FetchError::TooLarge { limit: 4 }),
+        "got {error:?}"
+    );
+    assert!(!dest.exists(), "destination must not exist on failure");
+    let part = dest.with_file_name(format!(
+        "{}.part",
+        dest.file_name().expect("name").to_string_lossy()
+    ));
+    assert!(!part.exists(), "the partial must be discarded on failure");
+}
+
+#[tokio::test]
+async fn http_deny_link_local_refuses_a_metadata_host() {
+    let dest = temp_dest("ssrf");
+    let mut registry = FetchRegistry::new();
+    registry.register(Arc::new(HttpFetcher::new().with_deny_link_local(true)));
+
+    let error = registry
+        .fetch(
+            &Address::new("http", "http://169.254.169.254/latest/meta-data/"),
+            dest.clone(),
+            None,
+        )
+        .await
+        .expect_err("a link-local host must be refused");
+
+    assert!(matches!(error, FetchError::Denied(_)), "got {error:?}");
+    assert!(!dest.exists(), "nothing must be written");
+}
+
+#[tokio::test]
 async fn http_read_timeout_fails_a_stalled_response() {
     let url = serve_stalled().await;
     let dest = temp_dest("stalled");

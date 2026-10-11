@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Fetch policy on `HttpFetcher`.** `with_max_bytes(n)` caps a single download at
+  `n` bytes, enforced on the streamed body (a lying `Content-Length` cannot get
+  around it) and reported as the new `FetchError::TooLarge`. `with_deny_link_local(true)`
+  refuses `http(s)` requests to a literal link-local / unspecified host — the SSRF
+  path to cloud metadata (`169.254.169.254`) — reported as `FetchError::Denied`.
+  Both are opt-in. Configurable as `[fetch] max_bytes = …` and
+  `deny_link_local = true`.
+- **`GatewayFetcher`**, the generic form of `IpfsGatewayFetcher`:
+  `GatewayFetcher::new(scheme, prefix, gateways)` rewrites `<scheme>://<rest>` to
+  `<gateway><prefix><rest>` and fetches it over HTTP, failing over across
+  gateways. Any value-addressed network behind an HTTP gateway (IPFS, FProxy, …)
+  now has a ready fetcher instead of a bespoke one.
 - examples: `crates/ptox/examples/client.rs`, a runnable, offline end-to-end
   client — an in-process `SearchProvider`, a ranked `Engine::search`, and an
   `Engine::fetch` of the top hit to a temp file through a fake `Fetcher` that

@@ -191,6 +191,8 @@ pub struct HttpFetcher {
     schemes: Vec<String>,
     retry: RetryPolicy,
     resume: bool,
+    max_bytes: Option<u64>,
+    deny_link_local: bool,
 }
 
 impl HttpFetcher {
@@ -258,6 +260,8 @@ impl HttpFetcher {
             schemes: vec!["http".to_owned(), "https".to_owned()],
             retry: RetryPolicy::default(),
             resume: false,
+            max_bytes: None,
+            deny_link_local: false,
         }
     }
 
@@ -418,6 +422,54 @@ impl HttpFetcher {
     pub fn resume_enabled(&self) -> bool {
         self.resume
     }
+
+    /// Cap the number of bytes a single fetch may write.
+    ///
+    /// Off by default (unbounded). When set, a response body that would exceed
+    /// `max_bytes` aborts with [`FetchError::TooLarge`] and the partial is
+    /// discarded — a guard against a malicious or misbehaving source exhausting
+    /// disk. The cap is enforced on the bytes actually streamed, so a lying or
+    /// absent `Content-Length` cannot get around it.
+    ///
+    /// ```
+    /// use ptox::HttpFetcher;
+    ///
+    /// let fetcher = HttpFetcher::new().with_max_bytes(64 * 1024 * 1024);
+    /// assert_eq!(fetcher.max_bytes(), Some(64 * 1024 * 1024));
+    /// ```
+    pub fn with_max_bytes(mut self, max_bytes: u64) -> Self {
+        self.max_bytes = Some(max_bytes);
+        self
+    }
+
+    /// The configured download cap, if any.
+    pub fn max_bytes(&self) -> Option<u64> {
+        self.max_bytes
+    }
+
+    /// Refuse `http(s)` requests to a link-local or unspecified host — the SSRF
+    /// path to cloud metadata (`169.254.169.254`) and the like.
+    ///
+    /// Off by default. This checks a **literal** IP host (and a few metadata
+    /// hostnames); it cannot see an address that DNS resolves to a link-local IP,
+    /// so pair it with a resolver policy if that matters. Loopback and private
+    /// LAN hosts are allowed, since local gateways live there.
+    ///
+    /// ```
+    /// use ptox::HttpFetcher;
+    ///
+    /// let fetcher = HttpFetcher::new().with_deny_link_local(true);
+    /// assert!(fetcher.denies_link_local());
+    /// ```
+    pub fn with_deny_link_local(mut self, deny: bool) -> Self {
+        self.deny_link_local = deny;
+        self
+    }
+
+    /// Whether link-local hosts are refused.
+    pub fn denies_link_local(&self) -> bool {
+        self.deny_link_local
+    }
 }
 
 impl Default for HttpFetcher {
@@ -445,6 +497,15 @@ impl Fetcher for HttpFetcher {
         request: &FetchRequest,
         progress: &ProgressFn<'_>,
     ) -> Result<Fetched, FetchError> {
+        if self.deny_link_local {
+            if let Some(host) = host_of(&request.address.uri) {
+                if is_link_local_host(host) {
+                    return Err(FetchError::Denied(format!(
+                        "`{host}` is a link-local/unspecified (SSRF) host"
+                    )));
+                }
+            }
+        }
         let temp = temp_path(&request.destination);
         let marker = resume_marker_path(&temp);
         let attempts = self.retry.max_attempts();
@@ -556,7 +617,15 @@ impl HttpFetcher {
         if resume_from > 0 && status == reqwest::StatusCode::RANGE_NOT_SATISFIABLE {
             if let Some(total) = content_range_total(response.headers()) {
                 if resume_from >= total {
-                    return finish_partial(request, &temp, &marker, resume_from, hasher).await;
+                    return finish_partial(
+                        request,
+                        &temp,
+                        &marker,
+                        resume_from,
+                        hasher,
+                        self.max_bytes,
+                    )
+                    .await;
                 }
             }
             return Err(AttemptError::Permanent(FetchError::Network(format!(
@@ -592,7 +661,20 @@ impl HttpFetcher {
             (Sha256::new(), 0)
         };
 
-        match download(response, &temp, request, progress, hasher, total, appending).await {
+        match download(
+            response,
+            &temp,
+            request,
+            progress,
+            Resuming {
+                hasher,
+                total,
+                append: appending,
+            },
+            self.max_bytes,
+        )
+        .await
+        {
             Ok(fetched) => {
                 if self.resume {
                     let _ = tokio::fs::remove_file(&marker).await;
@@ -614,7 +696,13 @@ async fn finish_partial(
     marker: &Path,
     bytes: u64,
     hasher: Sha256,
+    max_bytes: Option<u64>,
 ) -> Result<Fetched, AttemptError> {
+    if let Some(limit) = max_bytes {
+        if bytes > limit {
+            return Err(AttemptError::Permanent(FetchError::TooLarge { limit }));
+        }
+    }
     let digest = hex::encode(hasher.finalize());
     verify_sha256(request.expected_sha256.as_deref(), &digest).map_err(AttemptError::Permanent)?;
     tokio::fs::rename(temp, &request.destination)
@@ -629,23 +717,31 @@ async fn finish_partial(
     })
 }
 
+/// A download's resumable state: the running hash, the byte count so far, and
+/// whether the body appends to an existing partial.
+struct Resuming {
+    hasher: Sha256,
+    total: u64,
+    append: bool,
+}
+
 /// Stream `response` to `temp`, verify its hash, then rename it into place.
 ///
-/// `hasher` and `total` may carry a pre-hashed prefix when resuming; `append`
-/// selects appending to an existing `temp` instead of truncating it.
+/// `resume.hasher` and `resume.total` may carry a pre-hashed prefix when
+/// resuming; `resume.append` selects appending to an existing `temp` instead of
+/// truncating it.
 async fn download(
     response: reqwest::Response,
     temp: &Path,
     request: &FetchRequest,
     progress: &ProgressFn<'_>,
-    mut hasher: Sha256,
-    mut total: u64,
-    append: bool,
+    mut resume: Resuming,
+    max_bytes: Option<u64>,
 ) -> Result<Fetched, FetchError> {
     if let Some(parent) = temp.parent() {
         tokio::fs::create_dir_all(parent).await?;
     }
-    let mut file = if append {
+    let mut file = if resume.append {
         tokio::fs::OpenOptions::new()
             .append(true)
             .open(temp)
@@ -653,30 +749,73 @@ async fn download(
     } else {
         tokio::fs::File::create(temp).await?
     };
-    if total > 0 {
-        progress(total);
+    if resume.total > 0 {
+        progress(resume.total);
     }
     let mut stream = response.bytes_stream();
 
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|error| FetchError::Network(error.to_string()))?;
-        hasher.update(&chunk);
+        if let Some(limit) = max_bytes {
+            if resume.total + chunk.len() as u64 > limit {
+                return Err(FetchError::TooLarge { limit });
+            }
+        }
+        resume.hasher.update(&chunk);
         file.write_all(&chunk).await?;
-        total += chunk.len() as u64;
-        progress(total);
+        resume.total += chunk.len() as u64;
+        progress(resume.total);
     }
     file.flush().await?;
 
-    let digest = hex::encode(hasher.finalize());
+    let digest = hex::encode(resume.hasher.finalize());
     verify_sha256(request.expected_sha256.as_deref(), &digest)?;
     tokio::fs::rename(temp, &request.destination).await?;
 
     Ok(Fetched {
         path: request.destination.clone(),
-        bytes: total,
+        bytes: resume.total,
         sha256: Some(digest),
         address: request.address.clone(),
     })
+}
+
+/// The host of a `scheme://[user@]host[:port]/...` URI (no `url` dependency).
+fn host_of(uri: &str) -> Option<&str> {
+    let rest = uri.split_once("://")?.1;
+    let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+    let authority = &rest[..end];
+    let host_port = authority.rsplit('@').next().unwrap_or(authority);
+    if let Some(bracketed) = host_port.strip_prefix('[') {
+        return bracketed.split(']').next();
+    }
+    Some(host_port.split(':').next().unwrap_or(host_port))
+}
+
+/// Whether `host` is a link-local / unspecified literal IP, or a known metadata
+/// name. DNS-resolved link-local addresses are out of reach here.
+fn is_link_local_host(host: &str) -> bool {
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        return is_blocked_ip(ip);
+    }
+    matches!(
+        host.to_ascii_lowercase().as_str(),
+        "metadata.google.internal" | "metadata.goog" | "instance-data"
+    )
+}
+
+fn is_blocked_ip(ip: std::net::IpAddr) -> bool {
+    use std::net::IpAddr;
+    match ip {
+        IpAddr::V4(v4) => v4.is_link_local() || v4.is_unspecified() || v4.is_broadcast(),
+        IpAddr::V6(v6) => {
+            v6.is_unspecified()
+                || (v6.segments()[0] & 0xffc0) == 0xfe80
+                || v6
+                    .to_ipv4_mapped()
+                    .is_some_and(|v4| is_blocked_ip(IpAddr::V4(v4)))
+        }
+    }
 }
 
 /// `<destination>.part.src`: records which address a partial download came from,

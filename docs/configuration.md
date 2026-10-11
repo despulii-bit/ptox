@@ -141,6 +141,24 @@ local `file://` fetcher when the off-by-default `file` feature is on). So an
 explicitly configured command or proxy wins over a built-in handler for the same
 scheme.
 
+### `[fetch]` policy (`max_bytes`, `deny_link_local`)
+
+Optional guards applied to the built-in `http`/`https` fetcher:
+
+```toml
+[fetch]
+max_bytes = 268435456     # cap a single download at 256 MiB (default: unbounded)
+deny_link_local = true    # refuse requests to link-local / metadata hosts
+```
+
+`max_bytes` aborts an over-large download with `FetchError::TooLarge` (the partial
+is discarded); it is enforced on the streamed body, so a missing or lying
+`Content-Length` does not bypass it. `deny_link_local` rejects an `http(s)` address
+whose host is a literal link-local/unspecified IP (e.g. cloud metadata at
+`169.254.169.254`) or a known metadata name, with `FetchError::Denied`; loopback
+and private LAN hosts are allowed, since local gateways live there. Both default
+to the off state, so behavior is unchanged unless you opt in.
+
 ## Building an engine
 
 The canonical `load → search` path is one call. `Config::engine()` wires the

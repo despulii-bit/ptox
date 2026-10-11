@@ -19,6 +19,7 @@
 mod command;
 #[cfg(feature = "file")]
 mod file;
+mod gateway;
 mod http;
 #[cfg(feature = "ipfs")]
 mod ipfs;
@@ -27,6 +28,7 @@ mod proxy;
 pub use command::CommandFetcher;
 #[cfg(feature = "file")]
 pub use file::FileFetcher;
+pub use gateway::GatewayFetcher;
 pub use http::{HttpFetcher, ProxyConfig, RetryPolicy};
 #[cfg(feature = "ipfs")]
 pub use ipfs::{IpfsGatewayFetcher, DEFAULT_IPFS_GATEWAY};
@@ -81,6 +83,17 @@ pub enum FetchError {
     /// A local-file fetch was refused by policy (outside every configured root).
     #[error("access denied: {0}")]
     AccessDenied(String),
+    /// The response body exceeded the configured [`HttpFetcher::with_max_bytes`]
+    /// limit; the partial download was discarded.
+    #[error("content exceeds the {limit}-byte limit")]
+    TooLarge {
+        /// The cap that was exceeded, in bytes.
+        limit: u64,
+    },
+    /// The address was refused by the fetcher's policy (e.g. a link-local host
+    /// when [`HttpFetcher::with_deny_link_local`] is on).
+    #[error("refused: {0}")]
+    Denied(String),
 }
 
 /// A single retrieval job: one address, one destination path.
