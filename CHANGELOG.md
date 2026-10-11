@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-10-10
+
 ### Added
 
 - **Fetch policy on `HttpFetcher`.** `with_max_bytes(n)` caps a single download at
@@ -380,7 +382,8 @@ First public release.
 - **Spec** — the contract, conformance requirements, JSON Schema, and test
   vectors, shipped inside `crates/ptox/spec/`.
 
-[Unreleased]: https://github.com/despulii-bit/ptox/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/despulii-bit/ptox/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/despulii-bit/ptox/releases/tag/v0.5.1
 [0.5.0]: https://github.com/despulii-bit/ptox/releases/tag/v0.5.0
 [0.4.0]: https://github.com/despulii-bit/ptox/releases/tag/v0.4.0
 [0.3.0]: https://github.com/despulii-bit/ptox/releases/tag/v0.3.0
