@@ -16,8 +16,10 @@ There are two ways to plug in a network:
 - **Rust** — implement the `SearchProvider` trait and hand it to `Engine`/`fanout`.
   Best when the provider is a Rust crate (this guide).
 - **Any language** — speak the NDJSON wire format and wrap the program with
-  `SubprocessProvider`. See `crates/ptox/spec/core-contract.md` §9 and
-  [`crates/ptox/examples/ndjson_provider.rs`](../crates/ptox/examples/ndjson_provider.rs).
+  `SubprocessProvider`. See `crates/ptox/spec/core-contract.md` §9,
+  [`crates/ptox/examples/ndjson_provider.rs`](../crates/ptox/examples/ndjson_provider.rs),
+  and the copy-paste skeletons in
+  [the appendix](#appendix-a-minimal-ndjson-provider-any-language).
 
 The contract is the same either way: name, capabilities, and a stream of
 results where failures are per-item, never global.
@@ -316,3 +318,145 @@ when any check fails, so it drops straight into CI.
 Then open a PR against `ptox` or publish the provider in its own repo — see
 [CONTRIBUTING.md](../CONTRIBUTING.md). Either way, the conformance suite is how
 a provider proves it fits.
+
+## Appendix: a minimal NDJSON provider (any language)
+
+The wire format is deliberately tiny. A provider is a program that reads **one**
+JSON request line from stdin and writes JSON lines to stdout until it emits
+`done`. The host bounds each line (default 8 MiB), fills in `provider`
+attribution, and never sends a second request on the same process.
+
+```
+host -> provider   {"v":2,"id":1,"method":"search","params":{"query":<FileQuery>}}
+provider -> host   {"id":1,"result":<FileResult>}                      # zero or more
+provider -> host   {"id":1,"error":{"code":"transport","message":"…"}}   # instead of results
+provider -> host   {"id":1,"done":true}                                # always last
+```
+
+Optionally answer a capabilities probe (a provider that ignores it is treated as
+universal):
+
+```
+host -> provider   {"v":2,"id":1,"method":"capabilities","params":{}}
+provider -> host   {"id":1,"result":{"query":["text"],"requires":["text"],"schemes":["https"]}}
+provider -> host   {"id":1,"done":true}
+```
+
+Two rules everything else follows from:
+
+- **Leave `provider` out of each result.** The host stamps it.
+- **Honor `limit`** (`params.query.limit`) and yield `{"code":"unsupported"}` for
+  a query shape you cannot serve — never a misleading empty stream.
+
+### JavaScript (Node)
+
+```js
+#!/usr/bin/env node
+// TODO: rename, implement `search`, then: ptox-conformance -- node this-file.js
+process.stdin.setEncoding("utf8");
+
+const CAPABILITIES = { query: ["text"], requires: ["text"], schemes: ["https"] };
+const emit = (o) => process.stdout.write(JSON.stringify(o) + "\n");
+const done = () => emit({ id: 1, done: true });
+const fail = (code, message) => emit({ id: 1, error: { code, message } });
+
+let input = "";
+process.stdin.on("data", (chunk) => (input += chunk));
+process.stdin.on("end", async () => {
+  let request;
+  try {
+    request = JSON.parse(input.split("\n").find((l) => l.trim()) || "{}");
+  } catch (error) {
+    return fail("malformed", String(error));
+  }
+
+  if (request.method === "capabilities") {
+    emit({ id: 1, result: CAPABILITIES });
+    return done();
+  }
+
+  const query = request?.params?.query ?? {};
+  const text = (query.text ?? "").trim();
+  const limit = Number.isFinite(query.limit) ? query.limit : 20;
+  if (!text) return done();
+
+  try {
+    for (const hit of (await search(text)).slice(0, limit)) {
+      emit({
+        id: 1,
+        result: {
+          title: hit.title,
+          addresses: [{ scheme: "https", uri: hit.url }],
+          size: hit.size,
+          mimetype: hit.mimetype,
+        },
+      });
+    }
+    done();
+  } catch (error) {
+    fail("transport", String(error));
+  }
+});
+
+async function search(text) {
+  return []; // TODO: query your network; return [{ title, url, size?, mimetype? }]
+}
+```
+
+### Python
+
+```python
+#!/usr/bin/env python3
+# TODO: implement `search`, then: ptox-conformance -- python3 this-file.py
+import json
+import sys
+
+CAPABILITIES = {"query": ["text"], "requires": ["text"], "schemes": ["https"]}
+
+def emit(obj):
+    print(json.dumps(obj), flush=True)
+
+def search(text):
+    return []  # TODO: query your network
+
+def main():
+    line = next((l for l in sys.stdin if l.strip()), "")
+    request = json.loads(line or "{}")
+
+    if request.get("method") == "capabilities":
+        emit({"id": 1, "result": CAPABILITIES})
+        emit({"id": 1, "done": True})
+        return
+
+    query = request.get("params", {}).get("query", {})
+    text = (query.get("text") or "").strip()
+    limit = query.get("limit") or 20
+    if not text:
+        emit({"id": 1, "done": True})
+        return
+    try:
+        for hit in search(text)[:limit]:
+            emit({"id": 1, "result": {
+                "title": hit["title"],
+                "addresses": [{"scheme": "https", "uri": hit["url"]}],
+            }})
+        emit({"id": 1, "done": True})
+    except Exception as error:  # noqa: BLE001 - report, don't crash the host
+        emit({"id": 1, "error": {"code": "transport", "message": str(error)}})
+
+if __name__ == "__main__":
+    main()
+```
+
+### Wire it up and validate
+
+```toml
+[[provider]]
+name = "my-network"
+program = "node"
+args = ["/path/to/adapter.js"]
+```
+
+```sh
+cargo run -p ptox-conformance -- --query "annual report" -- node /path/to/adapter.js
+```
